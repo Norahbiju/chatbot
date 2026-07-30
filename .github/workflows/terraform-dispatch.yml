@@ -149,7 +149,7 @@ jobs:
             const {owner, repo} = context.repo;
             const run = await github.rest.actions.getWorkflowRun({owner, repo, run_id});
             if (run.data.repository.full_name !== `${owner}/${repo}`) core.setFailed('Source run repository mismatch.');
-            if (run.data.path !== process.env.WORKFLOW_FILE) core.setFailed('Source run workflow file mismatch.');
+            if (run.data.path !== '.github/workflows/terraform-dispatch.yml') core.setFailed('Source run workflow file mismatch.');
             if (run.data.event !== 'workflow_dispatch') core.setFailed('Source run was not workflow_dispatch.');
             if (run.data.status !== 'completed' || run.data.conclusion !== 'success') core.setFailed('Source run did not complete successfully.');
             if (run.data.head_branch !== '${{ github.event.repository.default_branch }}') core.setFailed('Source run was not from the default branch.');
