@@ -23,8 +23,8 @@ Workflow triggers:
 - `workflow_dispatch` with `action` of `plan`, `apply`, or `destroy`; `stack` of `core` or `application`; optional `source_run_id` and `destroy_confirmation`. The pipeline currently targets `dev` only.
 
 Repository variables:
-- Required: `AWS_ROLE_ARN`, `AWS_REGION`, `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_STATE_PREFIX`, `TF_ALERT_EMAIL`, `TF_MONTHLY_BUDGET_LIMIT_USD`.
-- Optional: `AWS_PLAN_ROLE_ARN`. When absent, PR plans fall back to `AWS_ROLE_ARN` and emit a warning that a separate read-oriented plan role is safer.
+- Required: `AWS_REGION`, `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_STATE_PREFIX`, `TF_ALERT_EMAIL`, `TF_MONTHLY_BUDGET_LIMIT_USD`.
+- The current solo workflow pins the deployment role ARN in `.github/workflows/terraform.yml` as `arn:aws:iam::484632959006:role/aws-chatbot` to avoid GitHub variable mismatch while debugging OIDC.
 
 GitHub Environments:
 - Not used in the current solo-operator workflow.
@@ -47,6 +47,7 @@ Composite action responsibilities:
 - Configure Terraform plugin cache.
 - Configure AWS credentials through `aws-actions/configure-aws-credentials` and OIDC.
 - Verify the assumed AWS account through an explicit `aws sts get-caller-identity` check.
+- Print non-secret GitHub OIDC claims before assuming AWS credentials so trust-policy mismatches can be diagnosed.
 - Run `aws sts get-caller-identity`.
 - Generate temporary backend HCL under `RUNNER_TEMP`.
 - Run `terraform init` with S3 backend `use_lockfile = true`.
@@ -108,3 +109,4 @@ GitHub-hosted execution is required to validate workflow expressions, OIDC claim
 - 2026-07-30: Implemented unified Terraform workflow, composite bootstrap action, metadata scripts, PR comments, exact apply, destroy safeguards, and local validation documentation.
 - 2026-07-30: Simplified for solo operation by removing GitHub Environment gates and the manual-plan PR comment input/path; workflow now targets `dev` directly.
 - 2026-07-30: Removed unsupported `allowed-account-ids` input from `aws-actions/configure-aws-credentials@v4`; account restriction is now enforced by an explicit STS account check.
+- 2026-07-30: Hardcoded the non-secret AWS deployment role ARN to `aws-chatbot` and added OIDC claim diagnostics before AWS credential configuration.

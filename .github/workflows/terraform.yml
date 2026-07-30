@@ -42,6 +42,7 @@ concurrency:
 
 env:
   WORKFLOW_FILE: .github/workflows/terraform.yml
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::484632959006:role/aws-chatbot
 
 jobs:
   static-validation:
@@ -185,7 +186,7 @@ jobs:
       TFVARS: ${{ matrix.tfvars }}
       STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ matrix.state_suffix }}
       ARTIFACT_NAME: tfplan-pr-${{ github.run_id }}-${{ matrix.stack }}-dev
-      ROLE_TO_ASSUME: ${{ vars.AWS_PLAN_ROLE_ARN || vars.AWS_ROLE_ARN }}
+      ROLE_TO_ASSUME: ${{ env.AWS_DEPLOY_ROLE_ARN }}
       TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
       TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
     steps:
@@ -201,12 +202,11 @@ jobs:
           set -Eeuo pipefail
           echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
 
-      - name: Warn when no separate plan role is configured
-        if: vars.AWS_PLAN_ROLE_ARN == ''
+      - name: Show plan role selection
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "::warning::AWS_PLAN_ROLE_ARN is not configured; using AWS_ROLE_ARN for PR plans. A separate read-oriented plan role is safer."
+          echo "Using deployment role ${ROLE_TO_ASSUME} for PR plans."
 
       - name: Bootstrap Terraform
         uses: ./.github/actions/terraform-bootstrap
@@ -378,7 +378,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -544,7 +544,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.metadata.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -613,7 +613,7 @@ jobs:
           working-directory: infra/stacks/application
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -632,7 +632,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -770,7 +770,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.metadata.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
