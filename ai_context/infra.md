@@ -45,4 +45,4 @@ Changing the S3 Vectors index metadata configuration is a vector-index replaceme
 - 2026-07-30: Simplified the single-root dependency flow by replacing same-apply SSM reads with direct module-output wiring from `core` to `application`.
 - 2026-07-30: Switched the default generation model to an APAC inference-profile ID and updated application IAM/resource handling so Bedrock generation can work from `ap-south-1`.
 - 2026-07-30: Updated the Bedrock data source to `data_deletion_policy = "RETAIN"` after a real destroy run failed while Bedrock tried to delete vector-store data during data-source removal.
-- 2026-07-30: Added a one-off repair workflow, corrected the live Bedrock data source deletion policy, reran the exact-plan pipeline, and verified the deployed frontend and chat API successfully.
+- 2026-07-30: Corrected the live Bedrock data source deletion policy, reran the exact-plan pipeline, verified the deployed frontend and chat API successfully, and then removed the temporary recovery workflow.
