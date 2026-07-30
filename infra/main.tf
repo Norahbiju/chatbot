@@ -36,7 +36,7 @@ module "application" {
   lambda_error_rate_threshold = var.lambda_error_rate_threshold
   api_rate_limit              = var.api_rate_limit
   api_burst_limit             = var.api_burst_limit
-  knowledge_base_id           = data.aws_ssm_parameter.knowledge_base_id.value
-  model_id                    = data.aws_ssm_parameter.model_id.value
-  alert_topic_arn             = data.aws_ssm_parameter.alert_topic_arn.value
+  knowledge_base_id           = module.core.knowledge_base_id
+  model_id                    = var.generation_model_id
+  alert_topic_arn             = module.core.sns_topic_arn
 }

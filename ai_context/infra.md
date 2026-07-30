@@ -10,6 +10,7 @@ Implemented locally as one Terraform root at `infra/`. The root calls two intern
 - `infra/modules/application` for DynamoDB, query Lambda, HTTP API, frontend S3 bucket, CloudFront, alarms, and budget
 
 The root reads the SSM parameters created by the core module during deployment and passes those resolved values into the application module so the full system can be planned and applied together in one state.
+The root keeps publishing identifiers to SSM, but inside the single Terraform state it now passes the core module outputs directly into the application module. This avoids stale SSM data-source reads when a knowledge base or alert topic is replaced during the same apply.
 
 ## Locked decisions
 Region `ap-south-1`; prefix `project_name-environment`; default tags `Project`, `Environment`, `ManagedBy`, `Repository`, optional `CostCenter`; backend is partial `backend "s3" {}` with one state key, default example `bedrock-rag/dev/terraform.tfstate`; no Terraform workspaces.
@@ -21,7 +22,7 @@ SSM names:
 - `/bedrock-rag/dev/bedrock/alert-topic-arn`
 
 ## Interfaces and dependencies
-One Terraform apply now creates the entire system. Internally, the core module must finish creating the SSM parameters before the root reads them and supplies the values to the application module. Source documents still depend on the completed ingestion event path so the first uploads are not missed.
+One Terraform apply now creates the entire system. Internally, the application module receives the knowledge base ID and SNS topic ARN directly from the core module outputs, while the core module still publishes those identifiers to SSM for external consumers. Source documents still depend on the completed ingestion event path so the first uploads are not missed.
 
 S3 buckets use private access, versioning, SSE-S3, TLS-only policies, lifecycle rules, and `force_destroy = true` by default for this dev-oriented setup. Lambda packaging, bucket hardening, alarms, and IAM are implemented directly inside the two child modules instead of through extra helper modules.
 
@@ -39,3 +40,4 @@ Changing the S3 Vectors index metadata configuration is a vector-index replaceme
 - 2026-07-28: Created the original Terraform architecture, cost controls, and deployment documentation.
 - 2026-07-30: Simplified the previous multi-root layout into one Terraform root with `core` and `application` child modules, preserved SSM handoff behavior, and updated validation evidence.
 - 2026-07-30: Added S3 Vectors non-filterable Bedrock metadata keys so Bedrock ingestion can succeed within S3 Vectors metadata limits.
+- 2026-07-30: Simplified the single-root dependency flow by replacing same-apply SSM reads with direct module-output wiring from `core` to `application`.
