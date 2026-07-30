@@ -1,0 +1,108 @@
+name: Sync Knowledge Base
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  sync:
+    name: Start and watch KB ingestion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_KEY }}
+
+      - name: Start ingestion job
+        id: ingest
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+          kb_id="$(terraform output -raw knowledge_base_id)"
+          ds_id="$(terraform output -raw data_source_id)"
+          job_id="$(aws bedrock-agent start-ingestion-job \
+            --knowledge-base-id "${kb_id}" \
+            --data-source-id "${ds_id}" \
+            --description "Manual resync from GitHub Actions after ingestion Lambda fix" \
+            --client-token "gha-manual-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --query 'ingestionJob.ingestionJobId' \
+            --output text)"
+          echo "kb_id=${kb_id}" >> "${GITHUB_OUTPUT}"
+          echo "ds_id=${ds_id}" >> "${GITHUB_OUTPUT}"
+          echo "job_id=${job_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for ingestion completion
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          kb_id="${{ steps.ingest.outputs.kb_id }}"
+          ds_id="${{ steps.ingest.outputs.ds_id }}"
+          job_id="${{ steps.ingest.outputs.job_id }}"
+
+          echo "## Knowledge Base sync" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Knowledge Base ID: \`${kb_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Data Source ID: \`${ds_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Ingestion Job ID: \`${job_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+
+          for _ in $(seq 1 60); do
+            status="$(aws bedrock-agent get-ingestion-job \
+              --knowledge-base-id "${kb_id}" \
+              --data-source-id "${ds_id}" \
+              --ingestion-job-id "${job_id}" \
+              --query 'ingestionJob.status' \
+              --output text)"
+            stats="$(aws bedrock-agent get-ingestion-job \
+              --knowledge-base-id "${kb_id}" \
+              --data-source-id "${ds_id}" \
+              --ingestion-job-id "${job_id}" \
+              --query 'ingestionJob.statistics' \
+              --output json)"
+            echo "Current status: ${status}"
+            if [[ "${status}" == "COMPLETE" ]]; then
+              {
+                echo "- Final status: \`${status}\`"
+                echo "- Statistics: \`${stats}\`"
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            if [[ "${status}" == "FAILED" || "${status}" == "STOPPED" ]]; then
+              failure_reasons="$(aws bedrock-agent get-ingestion-job \
+                --knowledge-base-id "${kb_id}" \
+                --data-source-id "${ds_id}" \
+                --ingestion-job-id "${job_id}" \
+                --query 'ingestionJob.failureReasons' \
+                --output json)"
+              {
+                echo "- Final status: \`${status}\`"
+                echo "- Failure reasons: \`${failure_reasons}\`"
+              } >> "${GITHUB_STEP_SUMMARY}"
+              echo "Ingestion failed: ${failure_reasons}" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+          echo "Timed out waiting for ingestion job ${job_id}" >&2
+          exit 1
