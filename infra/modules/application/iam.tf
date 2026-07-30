@@ -21,9 +21,19 @@ data "aws_iam_policy_document" "query_lambda" {
     resources = [local.kb_arn]
   }
   statement {
-    sid       = "InvokeGenerationModel"
+    sid       = "InvokeGenerationProfile"
+    actions   = ["bedrock:InvokeModel", "bedrock:GetInferenceProfile"]
+    resources = [local.model_arn]
+  }
+  statement {
+    sid       = "InvokeGenerationFoundationModelsViaProfile"
     actions   = ["bedrock:InvokeModel"]
-    resources = concat([local.model_arn], local.cross_region_model_arns)
+    resources = local.cross_region_model_arns
+    condition {
+      test     = "StringLike"
+      variable = "bedrock:InferenceProfileArn"
+      values   = [local.model_arn]
+    }
   }
   statement {
     sid = "UseConversationTable"
