@@ -33,6 +33,11 @@ variable "lambda_runtime" {
   default = "python3.12"
 }
 
+variable "reserved_concurrency" {
+  type    = number
+  default = null
+}
+
 variable "read_capacity" {
   type    = number
   default = 5

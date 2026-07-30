@@ -13,6 +13,7 @@ module "core" {
   embedding_dimensions        = var.embedding_dimensions
   alert_email                 = var.alert_email
   lambda_runtime              = var.lambda_runtime
+  reserved_concurrency        = var.ingestion_lambda_reserved_concurrency
   lambda_error_rate_threshold = var.lambda_error_rate_threshold
 }
 
@@ -26,6 +27,7 @@ module "application" {
   cost_center                 = var.cost_center
   force_destroy_buckets       = var.force_destroy_buckets
   lambda_runtime              = var.lambda_runtime
+  reserved_concurrency        = var.query_lambda_reserved_concurrency
   read_capacity               = var.read_capacity
   write_capacity              = var.write_capacity
   retrieval_count             = var.retrieval_count

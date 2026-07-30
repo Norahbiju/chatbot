@@ -21,7 +21,7 @@ resource "aws_lambda_function" "query" {
   source_code_hash               = data.archive_file.query_lambda.output_base64sha256
   memory_size                    = 256
   timeout                        = 30
-  reserved_concurrent_executions = 2
+  reserved_concurrent_executions = var.reserved_concurrency
   tags                           = local.default_tags
 
   environment {
