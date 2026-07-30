@@ -1,0 +1,79 @@
+name: Repair Bedrock Data Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  repair:
+    name: Set Bedrock data source to RETAIN
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_KEY }}
+
+      - name: Update live data source deletion policy
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+
+          kb_id="$(terraform output -raw knowledge_base_id)"
+          ds_id="$(terraform output -raw data_source_id)"
+
+          aws bedrock-agent get-data-source \
+            --knowledge-base-id "${kb_id}" \
+            --data-source-id "${ds_id}" \
+            --output json > current-data-source.json
+
+          jq '{
+            knowledgeBaseId: .dataSource.knowledgeBaseId,
+            dataSourceId: .dataSource.dataSourceId,
+            name: .dataSource.name,
+            description: .dataSource.description,
+            dataSourceConfiguration: .dataSource.dataSourceConfiguration,
+            vectorIngestionConfiguration: .dataSource.vectorIngestionConfiguration,
+            dataDeletionPolicy: "RETAIN"
+          }' current-data-source.json > update-data-source.json
+
+          aws bedrock-agent update-data-source \
+            --cli-input-json file://update-data-source.json \
+            --output json > update-response.json
+
+          {
+            echo "## Bedrock data source repair"
+            echo
+            echo "- Knowledge Base ID: \`${kb_id}\`"
+            echo "- Data Source ID: \`${ds_id}\`"
+            echo "- Updated \`dataDeletionPolicy\` to \`RETAIN\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload repair artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-bedrock-data-source-${{ github.run_id }}
+          path: |
+            infra/current-data-source.json
+            infra/update-data-source.json
+            infra/update-response.json
+          if-no-files-found: error
