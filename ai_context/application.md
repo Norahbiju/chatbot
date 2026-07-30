@@ -6,7 +6,7 @@ Build a minimal Bedrock RAG chatbot that answers from a curated Markdown corpus,
 ## Current state
 Implemented locally. The query Lambda accepts API Gateway HTTP API payload version 2.0 requests at `POST /api/chat`, retrieves evidence with Bedrock Knowledge Bases `Retrieve`, invokes the configured model through `InvokeModel`, stores user and assistant messages separately, and returns citations. The ingestion Lambda consumes SQS batches from EventBridge S3 events and starts Knowledge Base ingestion when no active job exists.
 
-The Terraform root now packages both Lambdas through `archive_file` data sources inside `infra/modules/core` and `infra/modules/application`.
+The Terraform root now packages both Lambdas through `archive_file` data sources inside `infra/modules/core` and `infra/modules/application`. The knowledge-base corpus now goes beyond the original three overview notes and includes additional curated documents on GitHub Actions workflow syntax, contexts and runners, Kubernetes networking and policy, Kubernetes stateful/storage/security behavior, Terraform language and CLI behavior, and Terraform AWS provider serverless patterns.
 
 On 2026-07-30, the ingestion Lambda was corrected to use a full SHA-256 hex digest as the Bedrock ingestion `clientToken`, which keeps the token within the Bedrock API length requirements.
 
@@ -24,7 +24,7 @@ Query Lambda environment variables: `CONVERSATION_TABLE_NAME`, `KNOWLEDGE_BASE_I
 
 DynamoDB schema: partition key `session_id`, sort key `message_id`, fields `role`, `content`, `created_at`, `expires_at`.
 
-Prompt rules treat retrieved documents as untrusted evidence and require citation markers without fabrication. The new sample corpus is more intermediate-level and is based on official documentation themes for Terraform, Kubernetes, and GitHub Actions, but the repository text itself is original and shortened for cost-conscious retrieval.
+Prompt rules treat retrieved documents as untrusted evidence and require citation markers without fabrication. The corpus is based on official documentation themes for Terraform, Kubernetes, and GitHub Actions, but the repository text itself remains original, curated, and shortened for cost-conscious retrieval.
 
 ## Validation evidence
 `python -m compileall src scripts` passed. `python -m unittest discover -s src/ingestion_lambda/tests`, `python -m unittest discover -s src/query_lambda/tests`, and `python -m unittest discover -s scripts/tests` passed on 2026-07-30 using a local virtual environment with `boto3` and `botocore` installed for the run. Frontend uses DOM creation and `textContent`; no model output is inserted with `innerHTML`.
@@ -38,3 +38,4 @@ Requires AWS deployment validation for the final Bedrock generation-model switch
 - 2026-07-30: Fixed the ingestion Lambda Bedrock `clientToken` length so automatic knowledge-base sync requests satisfy the Bedrock API requirements.
 - 2026-07-30: Confirmed live retrieval failures were due to an empty knowledge base, diagnosed the S3 Vectors metadata-limit failure during manual sync, and updated the vector index design to mark Bedrock metadata fields as non-filterable.
 - 2026-07-30: Switched the query path from direct `amazon.nova-micro-v1:0` invocation to an APAC inference-profile model ID because live diagnostics showed on-demand invocation was not supported from `ap-south-1`.
+- 2026-07-30: Expanded the curated knowledge-base corpus with additional intermediate GitHub Actions, Kubernetes, and Terraform notes derived from official documentation themes.
