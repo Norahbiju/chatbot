@@ -1,0 +1,100 @@
+name: Terraform Bootstrap
+description: Shared Terraform setup, AWS OIDC authentication, backend init, and validation.
+
+inputs:
+  working-directory:
+    required: true
+    description: Terraform root module directory.
+  terraform-version:
+    required: true
+    description: Terraform version to install.
+  aws-region:
+    required: true
+    description: AWS region for provider and STS.
+  role-to-assume:
+    required: true
+    description: AWS IAM role ARN to assume through GitHub OIDC.
+  aws-account-id:
+    required: true
+    description: Expected AWS account ID.
+  state-bucket:
+    required: true
+    description: Existing S3 Terraform state bucket.
+  state-region:
+    required: true
+    description: Region of the Terraform state bucket.
+  state-key:
+    required: true
+    description: Stack-specific Terraform state key.
+
+outputs:
+  backend-config:
+    description: Path to the generated backend configuration file.
+    value: ${{ steps.backend.outputs.backend_config }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Configure Terraform plugin cache
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        mkdir -p "${HOME}/.terraform.d/plugin-cache"
+        echo "TF_PLUGIN_CACHE_DIR=${HOME}/.terraform.d/plugin-cache" >> "${GITHUB_ENV}"
+
+    - name: Cache Terraform plugins
+      uses: actions/cache@v4
+      with:
+        path: ~/.terraform.d/plugin-cache
+        key: terraform-plugin-cache-${{ runner.os }}-${{ inputs.terraform-version }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          terraform-plugin-cache-${{ runner.os }}-${{ inputs.terraform-version }}-
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-session-name: github-actions-terraform
+        allowed-account-ids: ${{ inputs.aws-account-id }}
+
+    - name: Verify AWS identity
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        aws sts get-caller-identity --query 'Account' --output text
+
+    - name: Generate backend config
+      id: backend
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        backend_config="${RUNNER_TEMP}/terraform-backend-${{ inputs.state-key }}.hcl"
+        mkdir -p "$(dirname "${backend_config}")"
+        cat > "${backend_config}" <<BACKEND
+        bucket       = "${{ inputs.state-bucket }}"
+        key          = "${{ inputs.state-key }}"
+        region       = "${{ inputs.state-region }}"
+        encrypt      = true
+        use_lockfile = true
+        BACKEND
+        echo "backend_config=${backend_config}" >> "${GITHUB_OUTPUT}"
+
+    - name: Terraform init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        terraform init -input=false -backend-config="${{ steps.backend.outputs.backend_config }}"
+
+    - name: Terraform validate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        terraform validate
