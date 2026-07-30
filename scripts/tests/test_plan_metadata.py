@@ -35,13 +35,13 @@ class MetadataTests(unittest.TestCase):
             "--repository": "owner/repo",
             "--workflow-file": ".github/workflows/terraform.yml",
             "--workflow-run-id": "123",
-            "--stack": "core",
+            "--stack": "infra",
             "--environment": "dev",
             "--commit-sha": "abc",
             "--head-branch": "main",
             "--default-branch": "main",
             "--terraform-version": "1.12.2",
-            "--state-key": "bedrock-rag/dev/core/terraform.tfstate",
+            "--state-key": "bedrock-rag/dev/terraform.tfstate",
         }
         args.update(overrides)
         flat = []
@@ -57,9 +57,9 @@ class MetadataTests(unittest.TestCase):
             "--repository": "owner/repo",
             "--workflow-file": ".github/workflows/terraform.yml",
             "--workflow-run-id": "123",
-            "--stack": "core",
+            "--stack": "infra",
             "--environment": "dev",
-            "--state-key": "bedrock-rag/dev/core/terraform.tfstate",
+            "--state-key": "bedrock-rag/dev/terraform.tfstate",
             "--default-branch": "main",
         }
         args.update(overrides)
@@ -68,17 +68,13 @@ class MetadataTests(unittest.TestCase):
             flat.extend([key, value])
         return subprocess.run([sys.executable, str(VERIFY), *flat], text=True, capture_output=True)
 
-    def test_valid_core_metadata(self):
+    def test_valid_infra_metadata(self):
         self.create()
         self.assertEqual(self.verify().returncode, 0)
 
-    def test_valid_application_metadata(self):
-        self.create(**{"--stack": "application", "--state-key": "bedrock-rag/dev/application/terraform.tfstate"})
-        self.assertEqual(self.verify(**{"--stack": "application", "--state-key": "bedrock-rag/dev/application/terraform.tfstate"}).returncode, 0)
-
     def test_wrong_stack(self):
         self.create()
-        self.assertNotEqual(self.verify(**{"--stack": "application"}).returncode, 0)
+        self.assertNotEqual(self.verify(**{"--stack": "other"}).returncode, 0)
 
     def test_wrong_environment(self):
         self.create()

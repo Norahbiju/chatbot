@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VALID_STACKS = {"core", "application"}
+VALID_STACKS = {"infra"}
 VALID_ENVIRONMENTS = {"dev"}
 
 

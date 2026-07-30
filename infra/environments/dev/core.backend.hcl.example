@@ -1,5 +1,0 @@
-bucket       = "REPLACE_WITH_SHARED_STATE_BUCKET"
-key          = "bedrock-rag/dev/core/terraform.tfstate"
-region       = "ap-south-1"
-encrypt      = true
-use_lockfile = true
