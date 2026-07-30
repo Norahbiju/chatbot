@@ -26,6 +26,10 @@ def _extract_s3_key(record: Dict[str, Any]) -> str:
     return detail.get("object", {}).get("key", "")
 
 
+def _batch_failures(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    return [{"itemIdentifier": record.get("messageId", "unknown")} for record in records if record.get("messageId")]
+
+
 def _has_active_job(knowledge_base_id: str, data_source_id: str) -> bool:
     response = bedrock_agent.list_ingestion_jobs(
         knowledgeBaseId=knowledge_base_id,
@@ -36,7 +40,7 @@ def _has_active_job(knowledge_base_id: str, data_source_id: str) -> bool:
 
 
 def _start_job(knowledge_base_id: str, data_source_id: str, keys: List[str]) -> None:
-    digest = hashlib.sha256("\n".join(sorted(keys)).encode("utf-8")).hexdigest()[:32]
+    digest = hashlib.sha256("\n".join(sorted(keys)).encode("utf-8")).hexdigest()
     kwargs = {
         "knowledgeBaseId": knowledge_base_id,
         "dataSourceId": data_source_id,
@@ -75,16 +79,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         if _has_active_job(knowledge_base_id, data_source_id):
             _log("active_ingestion_exists", changed_objects=len(candidate_keys))
-            failures.extend({"itemIdentifier": r.get("messageId", "unknown")} for r in event.get("Records", []) if r.get("messageId"))
+            failures.extend(_batch_failures(event.get("Records", [])))
         else:
             _start_job(knowledge_base_id, data_source_id, candidate_keys)
             _log("ingestion_started", changed_objects=len(candidate_keys))
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "Unknown")
-        _log("bedrock_error", code=code)
+        _log("bedrock_error", code=code, retryable=_is_temporary(exc))
         if _is_temporary(exc):
-            failures.extend({"itemIdentifier": r.get("messageId", "unknown")} for r in event.get("Records", []) if r.get("messageId"))
+            failures.extend(_batch_failures(event.get("Records", [])))
         else:
-            failures.extend({"itemIdentifier": r.get("messageId", "unknown")} for r in event.get("Records", []) if r.get("messageId"))
+            failures.extend(_batch_failures(event.get("Records", [])))
 
     return {"batchItemFailures": failures}

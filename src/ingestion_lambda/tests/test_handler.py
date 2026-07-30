@@ -36,6 +36,7 @@ class IngestionTests(unittest.TestCase):
         result = self.handler.lambda_handler({"Records": [record()]}, None)
         self.assertEqual(result, {"batchItemFailures": []})
         self.client.start_ingestion_job.assert_called_once()
+        self.assertGreaterEqual(len(self.client.start_ingestion_job.call_args.kwargs["clientToken"]), 33)
 
     def test_multiple_events_one_batch(self):
         self.client.list_ingestion_jobs.return_value = {"ingestionJobSummaries": []}

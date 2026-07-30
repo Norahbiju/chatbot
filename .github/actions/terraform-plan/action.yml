@@ -1,0 +1,198 @@
+name: Terraform Plan Package
+description: Run terraform plan or destroy plan, generate checksums, metadata, and optional comment/summary files.
+
+inputs:
+  working-directory:
+    required: true
+    description: Terraform root directory.
+  mode:
+    required: true
+    description: Plan mode: speculative, manual, or destroy.
+  state-key:
+    required: true
+    description: Terraform backend state key.
+  workflow-file:
+    required: true
+    description: Workflow file path used for metadata verification.
+  stack:
+    required: true
+    description: Logical stack name.
+  environment:
+    required: true
+    description: Deployment environment.
+  terraform-version:
+    required: true
+    description: Terraform version used for the run.
+  repository:
+    required: true
+    description: GitHub repository full name.
+  workflow-run-id:
+    required: true
+    description: GitHub workflow run ID.
+  commit-sha:
+    required: true
+    description: Commit SHA for the plan metadata.
+  head-branch:
+    required: true
+    description: Head branch name for metadata.
+  default-branch:
+    required: true
+    description: Default branch name for metadata.
+  artifact-name:
+    required: true
+    description: Artifact name shown in comments and summaries.
+  run-url:
+    required: false
+    default: ""
+    description: Run URL for PR comment rendering.
+
+outputs:
+  status:
+    description: Plan status, one of no_changes, changes, failed.
+    value: ${{ steps.plan.outputs.status }}
+  plan-file:
+    description: Generated plan filename.
+    value: ${{ steps.paths.outputs.plan_file }}
+  plan-text-file:
+    description: Generated human-readable plan filename.
+    value: ${{ steps.paths.outputs.plan_text_file }}
+  plan-sha-file:
+    description: Generated checksum filename.
+    value: ${{ steps.paths.outputs.plan_sha_file }}
+  metadata-file:
+    description: Generated metadata filename.
+    value: ${{ steps.paths.outputs.metadata_file }}
+  comment-file:
+    description: Generated PR comment filename when applicable.
+    value: ${{ steps.paths.outputs.comment_file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare path outputs
+      id: paths
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        if [[ "${{ inputs.mode }}" == "destroy" ]]; then
+          echo "plan_file=destroy.tfplan" >> "${GITHUB_OUTPUT}"
+          echo "plan_text_file=destroy.tfplan.txt" >> "${GITHUB_OUTPUT}"
+          echo "plan_sha_file=destroy.tfplan.sha256" >> "${GITHUB_OUTPUT}"
+        else
+          echo "plan_file=tfplan" >> "${GITHUB_OUTPUT}"
+          echo "plan_text_file=tfplan.txt" >> "${GITHUB_OUTPUT}"
+          echo "plan_sha_file=tfplan.sha256" >> "${GITHUB_OUTPUT}"
+        fi
+        echo "metadata_file=metadata.json" >> "${GITHUB_OUTPUT}"
+        echo "comment_file=plan-comment.md" >> "${GITHUB_OUTPUT}"
+
+    - name: Run Terraform plan
+      id: plan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        if [[ "${{ inputs.mode }}" == "destroy" ]]; then
+          terraform plan -destroy -input=false -lock-timeout=5m -out="${{ steps.paths.outputs.plan_file }}"
+          terraform show -no-color "${{ steps.paths.outputs.plan_file }}" > "${{ steps.paths.outputs.plan_text_file }}"
+          sha256sum "${{ steps.paths.outputs.plan_file }}" | awk '{print $1}' > "${{ steps.paths.outputs.plan_sha_file }}"
+          echo "status=changes" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        args=(-input=false -lock-timeout=5m -detailed-exitcode -out="${{ steps.paths.outputs.plan_file }}")
+        if [[ -f terraform.tfvars ]]; then
+          args+=("-var-file=terraform.tfvars")
+        fi
+        set +e
+        terraform plan "${args[@]}" > tfplan.raw.txt 2>&1
+        code=$?
+        set -e
+        cp tfplan.raw.txt "${{ steps.paths.outputs.plan_text_file }}"
+        if [[ "${code}" -eq 0 ]]; then
+          echo "status=no_changes" >> "${GITHUB_OUTPUT}"
+        elif [[ "${code}" -eq 2 ]]; then
+          echo "status=changes" >> "${GITHUB_OUTPUT}"
+        else
+          echo "status=failed" >> "${GITHUB_OUTPUT}"
+        fi
+        if [[ -f "${{ steps.paths.outputs.plan_file }}" ]]; then
+          terraform show -no-color "${{ steps.paths.outputs.plan_file }}" > "${{ steps.paths.outputs.plan_text_file }}"
+          sha256sum "${{ steps.paths.outputs.plan_file }}" | awk '{print $1}' > "${{ steps.paths.outputs.plan_sha_file }}"
+        else
+          printf "no saved plan was produced\n" > "${{ steps.paths.outputs.plan_file }}"
+          sha256sum "${{ steps.paths.outputs.plan_file }}" | awk '{print $1}' > "${{ steps.paths.outputs.plan_sha_file }}"
+        fi
+
+    - name: Create plan metadata
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        if [[ "${{ inputs.mode }}" == "speculative" ]]; then
+          applyable=false
+          event_name=pull_request
+          action_value=
+        else
+          applyable=true
+          event_name=workflow_dispatch
+          action_value=plan
+        fi
+        python ../scripts/create_plan_metadata.py \
+          --output "${{ steps.paths.outputs.metadata_file }}" \
+          --plan-file "${{ steps.paths.outputs.plan_file }}" \
+          --lockfile .terraform.lock.hcl \
+          --applyable "${applyable}" \
+          --event "${event_name}" \
+          --action "${action_value}" \
+          --repository "${{ inputs.repository }}" \
+          --workflow-file "${{ inputs.workflow-file }}" \
+          --workflow-run-id "${{ inputs.workflow-run-id }}" \
+          --stack "${{ inputs.stack }}" \
+          --environment "${{ inputs.environment }}" \
+          --commit-sha "${{ inputs.commit-sha }}" \
+          --head-branch "${{ inputs.head-branch }}" \
+          --default-branch "${{ inputs.default-branch }}" \
+          --terraform-version "${{ inputs.terraform-version }}" \
+          --state-key "${{ inputs.state-key }}"
+
+    - name: Render PR comment
+      if: inputs.mode == 'speculative'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        python ../scripts/render_plan_comment.py \
+          --metadata "${{ steps.paths.outputs.metadata_file }}" \
+          --plan-text "${{ steps.paths.outputs.plan_text_file }}" \
+          --artifact-name "${{ inputs.artifact-name }}" \
+          --run-url "${{ inputs.run-url }}" \
+          --status "${{ steps.plan.outputs.status }}" \
+          --output "${{ steps.paths.outputs.comment_file }}"
+
+    - name: Publish summary
+      if: inputs.mode != 'speculative'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -Eeuo pipefail
+        if [[ "${{ inputs.mode }}" == "destroy" ]]; then
+          title="Destroy plan"
+        else
+          title="APPLYABLE MANUAL PLAN"
+        fi
+        {
+          echo "## ${title}"
+          echo
+          echo "- Stack: \`${{ inputs.stack }}\`"
+          echo "- Environment: \`${{ inputs.environment }}\`"
+          echo "- Artifact: \`${{ inputs.artifact-name }}\`"
+          if [[ "${{ inputs.mode }}" == "manual" ]]; then
+            echo "- Source run ID for apply: \`${{ inputs.workflow-run-id }}\`"
+          fi
+          echo "- Plan SHA-256: \`$(cat "${{ steps.paths.outputs.plan_sha_file }}")\`"
+          echo
+          echo '```terraform'
+          sed -n '1,500p' "${{ steps.paths.outputs.plan_text_file }}"
+          echo '```'
+        } >> "${GITHUB_STEP_SUMMARY}"

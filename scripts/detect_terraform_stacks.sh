@@ -27,7 +27,7 @@ infra_changed=false
 while IFS= read -r file; do
   [[ -z "${file}" ]] && continue
   case "${file}" in
-    infra/*|src/*|frontend/*|documents/*|.terraform-version|.github/actions/terraform-bootstrap/*|.github/workflows/terraform.yml)
+    infra/*|src/*|frontend/*|documents/*|.terraform-version|.github/actions/terraform-bootstrap/*|.github/actions/repo-validate/*|.github/actions/terraform-plan/*|.github/actions/restore-plan-artifact/*|.github/workflows/terraform-pr-plan.yml|.github/workflows/terraform-dispatch.yml)
       infra_changed=true
       ;;
     *.tf|*.tfvars|*.hcl)

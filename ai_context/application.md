@@ -8,6 +8,8 @@ Implemented locally. The query Lambda accepts API Gateway HTTP API payload versi
 
 The Terraform root now packages both Lambdas through `archive_file` data sources inside `infra/modules/core` and `infra/modules/application`.
 
+On 2026-07-30, the ingestion Lambda was corrected to use a full SHA-256 hex digest as the Bedrock ingestion `clientToken`, which keeps the token within the Bedrock API length requirements.
+
 API request: `{"sessionId":"uuid","message":"question"}`.
 
 Success response: `{"sessionId":"uuid","answer":"text [1]","citations":[{"id":1,"title":"Terraform State, Backends, and Module Design","source":"documents/terraform-basics.md","excerpt":"...","score":0.82}]}`.
@@ -33,3 +35,4 @@ Requires AWS deployment validation for Bedrock model access, S3 Vectors regional
 ## Change log
 - 2026-07-28: Initialized Lambda handlers, frontend, API contracts, prompt rules, DynamoDB schema, and tests.
 - 2026-07-30: Refactored Terraform packaging into a single root with internal modules and upgraded the sample knowledge-base corpus to more intermediate-level summaries.
+- 2026-07-30: Fixed the ingestion Lambda Bedrock `clientToken` length so automatic knowledge-base sync requests satisfy the Bedrock API requirements.

@@ -1,0 +1,89 @@
+name: Restore Saved Plan
+description: Verify plan metadata, check out the exact commit, restore the saved plan file, and optionally restore Lambda ZIP bundles.
+
+inputs:
+  download-directory:
+    required: true
+    description: Directory containing the downloaded artifact files.
+  working-directory:
+    required: true
+    description: Terraform root directory.
+  workflow-file:
+    required: true
+    description: Workflow file path for metadata verification.
+  workflow-run-id:
+    required: true
+    description: Source workflow run ID that created the saved plan.
+  repository:
+    required: true
+    description: GitHub repository full name.
+  stack:
+    required: true
+    description: Logical stack name.
+  environment:
+    required: true
+    description: Deployment environment.
+  state-key:
+    required: true
+    description: Terraform backend state key.
+  default-branch:
+    required: true
+    description: Default branch name.
+  plan-file-name:
+    required: false
+    default: tfplan
+    description: Plan filename inside the artifact and working directory.
+  restore-lambda-zips:
+    required: false
+    default: "false"
+    description: Whether to restore Lambda ZIP bundles.
+
+outputs:
+  commit-sha:
+    description: Commit SHA recorded in metadata.
+    value: ${{ steps.restore.outputs.commit_sha }}
+  terraform-version:
+    description: Terraform version from the checked out repository.
+    value: ${{ steps.restore.outputs.terraform_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Verify metadata and checkout exact commit
+      id: restore
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        metadata_path="${{ inputs.download-directory }}/metadata.json"
+        plan_path="${{ inputs.download-directory }}/${{ inputs.plan-file-name }}"
+        commit_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["commitSha"])' "${metadata_path}")"
+        echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+        python scripts/verify_plan_metadata.py \
+          --metadata "${metadata_path}" \
+          --plan-file "${plan_path}" \
+          --lockfile "${{ inputs.working-directory }}/.terraform.lock.hcl" \
+          --repository "${{ inputs.repository }}" \
+          --workflow-file "${{ inputs.workflow-file }}" \
+          --workflow-run-id "${{ inputs.workflow-run-id }}" \
+          --stack "${{ inputs.stack }}" \
+          --environment "${{ inputs.environment }}" \
+          --state-key "${{ inputs.state-key }}" \
+          --default-branch "${{ inputs.default-branch }}" \
+          --allow-lockfile-mismatch
+        git checkout --detach "${commit_sha}"
+        cp "${plan_path}" "${{ inputs.working-directory }}/${{ inputs.plan-file-name }}"
+        echo "terraform_version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+    - name: Restore Lambda ZIP artifacts
+      if: inputs.restore-lambda-zips == 'true'
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        mkdir -p "${{ inputs.working-directory }}/modules/core/.terraform"
+        mkdir -p "${{ inputs.working-directory }}/modules/application/.terraform"
+        if compgen -G "${{ inputs.download-directory }}/modules/core/.terraform/*.zip" > /dev/null; then
+          cp "${{ inputs.download-directory }}"/modules/core/.terraform/*.zip "${{ inputs.working-directory }}/modules/core/.terraform/"
+        fi
+        if compgen -G "${{ inputs.download-directory }}/modules/application/.terraform/*.zip" > /dev/null; then
+          cp "${{ inputs.download-directory }}"/modules/application/.terraform/*.zip "${{ inputs.working-directory }}/modules/application/.terraform/"
+        fi

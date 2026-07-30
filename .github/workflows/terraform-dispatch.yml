@@ -1,0 +1,374 @@
+name: Terraform Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        required: true
+        options:
+          - plan
+          - apply
+          - destroy
+      source_run_id:
+        required: false
+        type: string
+      destroy_confirmation:
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  static-validation:
+    name: Static validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Terraform
+        uses: ./.github/actions/repo-validate
+        with:
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+
+  manual-plan:
+    name: Trusted manual plan
+    if: inputs.action == 'plan'
+    runs-on: ubuntu-latest
+    needs: static-validation
+    steps:
+      - name: Enforce default branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ]]; then
+            echo "Manual plan must run from the repository default branch." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+
+      - name: Terraform plan package
+        id: plan
+        uses: ./.github/actions/terraform-plan
+        env:
+          TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
+          TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          mode: manual
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          workflow-file: .github/workflows/terraform-dispatch.yml
+          stack: ${{ vars.TF_STACK }}
+          environment: ${{ vars.TF_ENVIRONMENT }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          repository: ${{ github.repository }}
+          workflow-run-id: ${{ github.run_id }}
+          commit-sha: ${{ github.sha }}
+          head-branch: ${{ github.ref_name }}
+          default-branch: ${{ github.event.repository.default_branch }}
+          artifact-name: tfplan-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+
+      - name: Upload applyable plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          path: |
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan.txt
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan.sha256
+            ${{ vars.TF_WORKING_DIRECTORY }}/metadata.json
+            ${{ vars.TF_WORKING_DIRECTORY }}/modules/core/.terraform/*.zip
+            ${{ vars.TF_WORKING_DIRECTORY }}/modules/application/.terraform/*.zip
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: error
+
+  apply:
+    name: Apply exact saved plan
+    if: inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    concurrency:
+      group: terraform-${{ vars.TF_ENVIRONMENT }}-${{ vars.TF_STACK }}
+      cancel-in-progress: false
+    steps:
+      - name: Require source run ID and default branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${{ inputs.source_run_id }}"
+          if [[ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ]]; then
+            echo "Apply must run from the repository default branch." >&2
+            exit 1
+          fi
+
+      - name: Validate source run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run_id = Number('${{ inputs.source_run_id }}');
+            const {owner, repo} = context.repo;
+            const run = await github.rest.actions.getWorkflowRun({owner, repo, run_id});
+            if (run.data.repository.full_name !== `${owner}/${repo}`) core.setFailed('Source run repository mismatch.');
+            if (run.data.path !== process.env.WORKFLOW_FILE) core.setFailed('Source run workflow file mismatch.');
+            if (run.data.event !== 'workflow_dispatch') core.setFailed('Source run was not workflow_dispatch.');
+            if (run.data.status !== 'completed' || run.data.conclusion !== 'success') core.setFailed('Source run did not complete successfully.');
+            if (run.data.head_branch !== '${{ github.event.repository.default_branch }}') core.setFailed('Source run was not from the default branch.');
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download source plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-manual-${{ inputs.source_run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: downloaded-plan
+
+      - name: Restore saved plan
+        id: restore
+        uses: ./.github/actions/restore-plan-artifact
+        with:
+          download-directory: downloaded-plan
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          workflow-file: .github/workflows/terraform-dispatch.yml
+          workflow-run-id: ${{ inputs.source_run_id }}
+          repository: ${{ github.repository }}
+          stack: ${{ vars.TF_STACK }}
+          environment: ${{ vars.TF_ENVIRONMENT }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          default-branch: ${{ github.event.repository.default_branch }}
+          plan-file-name: tfplan
+          restore-lambda-zips: "true"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.restore.outputs.terraform-version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+
+      - name: Terraform apply saved plan
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+          terraform apply -input=false -auto-approve tfplan | tee apply-output.txt
+          {
+            echo "## Terraform apply"
+            echo
+            echo "- Stack: \`${{ vars.TF_STACK }}\`"
+            echo "- Environment: \`${{ vars.TF_ENVIRONMENT }}\`"
+            echo "- Source plan run ID: \`${{ inputs.source_run_id }}\`"
+            echo "- Commit: \`${{ steps.restore.outputs.commit-sha }}\`"
+            echo "- Plan SHA-256: \`$(python -c 'import json; print(json.load(open("../downloaded-plan/metadata.json"))["planSha256"])')\`"
+            echo
+            echo '```terraform'
+            sed -n '1,400p' apply-output.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  destroy-plan:
+    name: Destroy plan
+    if: inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce confirmation and default branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${GITHUB_REF_NAME}" != "${{ github.event.repository.default_branch }}" ]]; then
+            echo "Destroy must run from the repository default branch." >&2
+            exit 1
+          fi
+          bash scripts/check_destroy_order.sh "${{ vars.TF_STACK }}" "${{ vars.TF_ENVIRONMENT }}" "${{ inputs.destroy_confirmation }}"
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+
+      - name: Check active ingestion before destroy
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+          kb_id="$(terraform output -raw knowledge_base_id 2>/dev/null || true)"
+          ds_id="$(terraform output -raw data_source_id 2>/dev/null || true)"
+          if [[ -n "${kb_id}" && -n "${ds_id}" ]]; then
+            active="$(aws bedrock-agent list-ingestion-jobs --knowledge-base-id "${kb_id}" --data-source-id "${ds_id}" --query 'ingestionJobSummaries[?status==`STARTING` || status==`IN_PROGRESS`].ingestionJobId' --output text)"
+            if [[ -n "${active}" ]]; then
+              echo "Destroy blocked because a Knowledge Base ingestion job is active: ${active}" >&2
+              exit 1
+            fi
+          else
+            echo "Could not read KB/data source outputs; skipping active ingestion check."
+          fi
+
+      - name: Terraform destroy plan package
+        id: destroy_plan
+        uses: ./.github/actions/terraform-plan
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          mode: destroy
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          workflow-file: .github/workflows/terraform-dispatch.yml
+          stack: ${{ vars.TF_STACK }}
+          environment: ${{ vars.TF_ENVIRONMENT }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          repository: ${{ github.repository }}
+          workflow-run-id: ${{ github.run_id }}
+          commit-sha: ${{ github.sha }}
+          head-branch: ${{ github.ref_name }}
+          default-branch: ${{ github.event.repository.default_branch }}
+          artifact-name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+
+      - name: Upload destroy plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          path: |
+            ${{ vars.TF_WORKING_DIRECTORY }}/destroy.tfplan
+            ${{ vars.TF_WORKING_DIRECTORY }}/destroy.tfplan.txt
+            ${{ vars.TF_WORKING_DIRECTORY }}/destroy.tfplan.sha256
+            ${{ vars.TF_WORKING_DIRECTORY }}/metadata.json
+          retention-days: 3
+          if-no-files-found: error
+
+  destroy-apply:
+    name: Apply exact destroy plan
+    if: inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    needs: destroy-plan
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    concurrency:
+      group: terraform-${{ vars.TF_ENVIRONMENT }}-${{ vars.TF_STACK }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download destroy plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          path: downloaded-destroy
+
+      - name: Restore destroy plan
+        id: restore
+        uses: ./.github/actions/restore-plan-artifact
+        with:
+          download-directory: downloaded-destroy
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          workflow-file: .github/workflows/terraform-dispatch.yml
+          workflow-run-id: ${{ github.run_id }}
+          repository: ${{ github.repository }}
+          stack: ${{ vars.TF_STACK }}
+          environment: ${{ vars.TF_ENVIRONMENT }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          default-branch: ${{ github.event.repository.default_branch }}
+          plan-file-name: destroy.tfplan
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.restore.outputs.terraform-version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+
+      - name: Apply destroy plan
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+          terraform apply -input=false -auto-approve destroy.tfplan | tee destroy-output.txt
+          {
+            echo "## Terraform destroy apply"
+            echo
+            echo "- Stack: \`${{ vars.TF_STACK }}\`"
+            echo "- Environment: \`${{ vars.TF_ENVIRONMENT }}\`"
+            echo "- Destroy plan run ID: \`${GITHUB_RUN_ID}\`"
+            echo
+            echo '```terraform'
+            sed -n '1,400p' destroy-output.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"

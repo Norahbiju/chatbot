@@ -1,0 +1,132 @@
+name: Terraform PR Plan
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - "src/**"
+      - "frontend/**"
+      - "documents/**"
+      - ".github/actions/terraform-bootstrap/**"
+      - ".github/actions/repo-validate/**"
+      - ".github/actions/terraform-plan/**"
+      - ".github/actions/restore-plan-artifact/**"
+      - ".github/workflows/terraform-pr-plan.yml"
+      - ".github/workflows/terraform-dispatch.yml"
+      - ".terraform-version"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  static-validation:
+    name: Static validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Terraform
+        uses: ./.github/actions/repo-validate
+        with:
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+
+  pr-plan:
+    name: Speculative PR plan
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    needs: static-validation
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+
+      - name: Terraform plan package
+        id: plan
+        uses: ./.github/actions/terraform-plan
+        env:
+          TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
+          TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          mode: speculative
+          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          workflow-file: .github/workflows/terraform-pr-plan.yml
+          stack: ${{ vars.TF_STACK }}
+          environment: ${{ vars.TF_ENVIRONMENT }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          repository: ${{ github.repository }}
+          workflow-run-id: ${{ github.run_id }}
+          commit-sha: ${{ github.sha }}
+          head-branch: ${{ github.head_ref }}
+          default-branch: ${{ github.ref_name }}
+          artifact-name: tfplan-pr-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Upload speculative plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-pr-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          path: |
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan.txt
+            ${{ vars.TF_WORKING_DIRECTORY }}/tfplan.sha256
+            ${{ vars.TF_WORKING_DIRECTORY }}/metadata.json
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PR_COMMENT_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(`${{ vars.TF_WORKING_DIRECTORY }}/${{ steps.plan.outputs.comment-file }}`, 'utf8');
+            const marker = `<!-- terraform-plan:${{ vars.TF_STACK }}:${{ vars.TF_ENVIRONMENT }} -->`;
+            const {owner, repo} = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});
+            const existing = comments.find((comment) => comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }
+
+      - name: Fail when plan failed
+        if: steps.plan.outputs.status == 'failed'
+        shell: bash
+        run: exit 1

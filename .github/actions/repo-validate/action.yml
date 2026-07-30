@@ -1,0 +1,54 @@
+name: Repository Validate
+description: Set up Terraform and Python, then run local repository validation checks.
+
+inputs:
+  terraform-version:
+    required: true
+    description: Terraform version to install.
+  python-version:
+    required: false
+    default: "3.12"
+    description: Python version for tests and scripts.
+  working-directory:
+    required: false
+    default: "infra"
+    description: Terraform root directory.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Python test dependencies
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        python -m pip install --upgrade pip
+        python -m pip install boto3 botocore
+
+    - name: Validate repository
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        terraform fmt -check -recursive
+        terraform -chdir="${{ inputs.working-directory }}" init -backend=false
+        terraform -chdir="${{ inputs.working-directory }}" validate
+        python -m compileall src scripts
+        python -m unittest discover -s src/ingestion_lambda/tests
+        python -m unittest discover -s src/query_lambda/tests
+        python -m unittest discover -s scripts/tests
+        python scripts/validate_iam.py
+        python scripts/check_cost_guardrails.py
+        if command -v node >/dev/null 2>&1; then
+          node --check frontend/app.js
+        else
+          echo "Node.js unavailable; skipped JavaScript syntax validation."
+        fi

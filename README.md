@@ -30,7 +30,7 @@ flowchart LR
 
 ## Prerequisites
 
-- Terraform `1.12.2` or newer compatible with the pinned lock file
+- Terraform `1.15.1` or newer compatible with the pinned lock file
 - Python `3.12` for local unit tests
 - AWS access only when you are ready to plan or deploy
 
@@ -83,7 +83,10 @@ That means the whole system can be planned and applied in one run while still ke
 
 ## GitHub Actions Pipeline
 
-The repository includes a single-root Terraform workflow at `.github/workflows/terraform.yml`.
+The repository includes two Terraform workflows:
+
+- `.github/workflows/terraform-pr-plan.yml` for speculative PR plans and sticky PR comments
+- `.github/workflows/terraform-dispatch.yml` for manual `plan`, `apply`, and `destroy`
 
 It supports:
 
@@ -111,6 +114,10 @@ Suggested values:
 
 ```text
 AWS_REGION=ap-south-1
+AWS_ROLE_ARN=arn:aws:iam::<account-id>:role/aws-chatbot
+TF_STACK=infra
+TF_ENVIRONMENT=dev
+TF_WORKING_DIRECTORY=infra
 TF_STATE_REGION=ap-south-1
 TF_STATE_PREFIX=bedrock-rag
 TF_MONTHLY_BUDGET_LIMIT_USD=5
@@ -119,13 +126,13 @@ TF_MONTHLY_BUDGET_LIMIT_USD=5
 Manual trusted plan:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=plan
+Actions -> Terraform Dispatch -> Run workflow -> action=plan
 ```
 
 Manual apply uses the exact saved plan artifact:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=apply, source_run_id=<manual-plan-run-id>
+Actions -> Terraform Dispatch -> Run workflow -> action=apply, source_run_id=<manual-plan-run-id>
 ```
 
 Manual destroy requires an exact confirmation string:
