@@ -23,7 +23,7 @@ data "aws_iam_policy_document" "query_lambda" {
   statement {
     sid       = "InvokeGenerationModel"
     actions   = ["bedrock:InvokeModel"]
-    resources = [local.model_arn]
+    resources = concat([local.model_arn], local.cross_region_model_arns)
   }
   statement {
     sid = "UseConversationTable"

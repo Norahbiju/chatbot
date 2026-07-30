@@ -16,7 +16,7 @@ class QueryTests(unittest.TestCase):
     def setUp(self):
         os.environ["CONVERSATION_TABLE_NAME"] = "table"
         os.environ["KNOWLEDGE_BASE_ID"] = "kb"
-        os.environ["MODEL_ID"] = "amazon.nova-micro-v1:0"
+        os.environ["MODEL_ID"] = "apac.amazon.nova-micro-v1:0"
         with patch("boto3.resource") as resource, patch("boto3.client") as client:
             self.table = Mock()
             resource.return_value.Table.return_value = self.table

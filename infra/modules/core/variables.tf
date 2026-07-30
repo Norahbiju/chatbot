@@ -40,7 +40,7 @@ variable "embedding_model_id" {
 
 variable "generation_model_id" {
   type    = string
-  default = "amazon.nova-micro-v1:0"
+  default = "apac.amazon.nova-micro-v1:0"
 }
 
 variable "embedding_dimensions" {
