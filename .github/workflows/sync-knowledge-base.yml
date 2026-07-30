@@ -44,7 +44,7 @@ jobs:
             --knowledge-base-id "${kb_id}" \
             --data-source-id "${ds_id}" \
             --description "Manual resync from GitHub Actions after ingestion Lambda fix" \
-            --client-token "gha-manual-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --client-token "gha-manual-sync-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}" \
             --query 'ingestionJob.ingestionJobId' \
             --output text)"
           echo "kb_id=${kb_id}" >> "${GITHUB_OUTPUT}"
