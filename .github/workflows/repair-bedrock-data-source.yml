@@ -46,6 +46,28 @@ jobs:
             --data-source-id "${ds_id}" \
             --output json > current-data-source.json
 
+          name="$(jq -r '.dataSource.name' current-data-source.json)"
+          description="$(jq -r '.dataSource.description // empty' current-data-source.json)"
+
+          jq '.dataSource.dataSourceConfiguration' current-data-source.json > data-source-configuration.json
+          jq '.dataSource.vectorIngestionConfiguration' current-data-source.json > vector-ingestion-configuration.json
+
+          update_args=(
+            --knowledge-base-id "${kb_id}"
+            --data-source-id "${ds_id}"
+            --name "${name}"
+            --data-source-configuration file://data-source-configuration.json
+            --vector-ingestion-configuration file://vector-ingestion-configuration.json
+            --data-deletion-policy RETAIN
+            --output json
+          )
+
+          if [[ -n "${description}" ]]; then
+            update_args+=(--description "${description}")
+          fi
+
+          aws bedrock-agent update-data-source "${update_args[@]}" > update-response.json
+
           jq '{
             knowledgeBaseId: .dataSource.knowledgeBaseId,
             dataSourceId: .dataSource.dataSourceId,
@@ -55,10 +77,6 @@ jobs:
             vectorIngestionConfiguration: .dataSource.vectorIngestionConfiguration,
             dataDeletionPolicy: "RETAIN"
           }' current-data-source.json > update-data-source.json
-
-          aws bedrock-agent update-data-source \
-            --cli-input-json file://update-data-source.json \
-            --output json > update-response.json
 
           {
             echo "## Bedrock data source repair"
@@ -74,6 +92,8 @@ jobs:
           name: repair-bedrock-data-source-${{ github.run_id }}
           path: |
             infra/current-data-source.json
+            infra/data-source-configuration.json
             infra/update-data-source.json
             infra/update-response.json
+            infra/vector-ingestion-configuration.json
           if-no-files-found: error
