@@ -30,9 +30,10 @@ Prompt rules treat retrieved documents as untrusted evidence and require citatio
 `python -m compileall src scripts` passed. `python -m unittest discover -s src/ingestion_lambda/tests`, `python -m unittest discover -s src/query_lambda/tests`, and `python -m unittest discover -s scripts/tests` passed on 2026-07-30 using a local virtual environment with `boto3` and `botocore` installed for the run. Frontend uses DOM creation and `textContent`; no model output is inserted with `innerHTML`.
 
 ## Open issues
-Requires AWS deployment validation for Bedrock model access, S3 Vectors regional/account support, Knowledge Base ingestion, and CloudFront/API integration. Local JavaScript syntax validation still depends on Node.js being available on the machine that runs validation.
+Requires AWS deployment validation for Bedrock model access, S3 Vectors regional/account support, Knowledge Base ingestion, and CloudFront/API integration. On July 30, 2026, live diagnostics showed that empty chatbot answers were caused first by a historical ingestion Lambda `clientToken` length bug and then by S3 Vectors filterable metadata limits in the vector index. Local JavaScript syntax validation still depends on Node.js being available on the machine that runs validation.
 
 ## Change log
 - 2026-07-28: Initialized Lambda handlers, frontend, API contracts, prompt rules, DynamoDB schema, and tests.
 - 2026-07-30: Refactored Terraform packaging into a single root with internal modules and upgraded the sample knowledge-base corpus to more intermediate-level summaries.
 - 2026-07-30: Fixed the ingestion Lambda Bedrock `clientToken` length so automatic knowledge-base sync requests satisfy the Bedrock API requirements.
+- 2026-07-30: Confirmed live retrieval failures were due to an empty knowledge base, diagnosed the S3 Vectors metadata-limit failure during manual sync, and updated the vector index design to mark Bedrock metadata fields as non-filterable.
