@@ -9,7 +9,8 @@ locals {
     "arn:${data.aws_partition.current.partition}:bedrock:ap-southeast-1::foundation-model/amazon.nova-micro-v1:0",
     "arn:${data.aws_partition.current.partition}:bedrock:ap-southeast-2::foundation-model/amazon.nova-micro-v1:0",
     "arn:${data.aws_partition.current.partition}:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0",
-    "arn:${data.aws_partition.current.partition}:bedrock:ap-northeast-2::foundation-model/amazon.nova-micro-v1:0"
+    "arn:${data.aws_partition.current.partition}:bedrock:ap-northeast-2::foundation-model/amazon.nova-micro-v1:0",
+    "arn:${data.aws_partition.current.partition}:bedrock:ap-northeast-3::foundation-model/amazon.nova-micro-v1:0"
   ] : []
   api_domain = replace(aws_apigatewayv2_api.chat.api_endpoint, "https://", "")
 
