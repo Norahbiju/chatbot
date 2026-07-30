@@ -35,6 +35,24 @@ An intermediate design usually keeps stable non-secret configuration in reposito
 
 Secrets should be reserved for genuinely sensitive values. Identifiers such as Terraform state bucket names, regions, or workflow paths normally belong in variables, not secrets.
 
+## Contexts and variables solve different problems
+
+The easiest reliable distinction is:
+
+- **contexts** provide structured runtime or pre-runtime metadata that GitHub Actions exposes about the workflow run
+- **variables** provide user-managed values that workflows can reference for configuration
+
+Examples of contexts include `github`, `needs`, `runner`, `matrix`, and `inputs`. Those objects describe what is happening in the run and can often be used in expressions before a job starts.
+
+Examples of variables include repository, organization, or environment `vars`, plus workflow-defined `env` values. Those are mainly for supplying configuration values rather than for describing workflow state.
+
+In practice:
+
+- use a **context** when you need information about the event, job graph, runner, or workflow metadata
+- use a **variable** when you need a stable configurable value such as a region, directory path, or state bucket name
+
+That is why contexts are better thought of as metadata surfaces, while variables are better thought of as configuration surfaces.
+
 ## OIDC is a trust boundary, not just a convenience feature
 
 OIDC replaces long-lived cloud credentials with short-lived identity federation. The workflow requests an identity token and exchanges it with the cloud provider for a temporary session.

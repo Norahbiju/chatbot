@@ -51,6 +51,19 @@ Weak module boundaries often just move resources into another folder without cla
 
 That sounds basic, but the operational consequence is important: a reviewed saved plan is stronger than a later freshly generated plan, because it preserves exactly what was reviewed against the same configuration and backend state.
 
+## Why a reviewed saved plan is safer than rerunning plan before apply
+
+The direct risk in rerunning `plan` before `apply` is that the second plan may no longer represent what reviewers approved.
+
+That drift can happen because:
+
+- the branch changed after review
+- provider selections or lockfile state changed
+- backend state changed between runs
+- generated artifacts or packaged deployment inputs are no longer identical
+
+A reviewed saved plan is safer because it binds apply to the exact evaluated change set that was inspected earlier. In other words, it reduces the gap between review intent and execution reality.
+
 ## Validation commands answer different questions
 
 Common commands have distinct responsibilities:
