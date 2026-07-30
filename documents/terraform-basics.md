@@ -28,6 +28,8 @@ With the S3 backend, locking is optional and can be enabled with `use_lockfile =
 
 If a run crashes and leaves a stale lock behind, `terraform force-unlock` can remove it, but only after you verify that no other operation is still active. Force-unlocking the wrong lock can create multiple writers and corrupt the workflow.
 
+In practice, a saved-plan workflow is safer when the reviewed plan artifact and the later apply both point at the same locked backend key, because that keeps concurrency control and execution intent aligned.
+
 ## Planning, graph ordering, and unknown values
 
 Terraform builds a dependency graph before it applies changes. References between resources create edges in that graph, but explicit `depends_on` is still useful when the dependency is behavioral rather than expressed directly in an argument.
