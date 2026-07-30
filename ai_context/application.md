@@ -12,7 +12,7 @@ API request: `{"sessionId":"uuid","message":"question"}`. Success response: `{"s
 Session TTL is 24 hours. Maximum user message length is 2,000 characters. Recent history is capped at 8 messages. Retrieval result count defaults to 4. Maximum generation tokens defaults to 500. Frontend stores only a browser-generated UUID and calls the relative path `/api/chat`.
 
 ## Interfaces and dependencies
-Query Lambda environment variables: `CONVERSATION_TABLE_NAME`, `KNOWLEDGE_BASE_ID`, `MODEL_ID`, `RETRIEVAL_COUNT`, `MAX_GENERATION_TOKENS`, `MAX_MESSAGE_LENGTH`, `HISTORY_LIMIT`, `SESSION_TTL_SECONDS`. DynamoDB schema: partition key `session_id`, sort key `message_id`, fields `role`, `content`, `created_at`, `expires_at`. Prompt rules treat retrieved documents as untrusted evidence and require citation markers without fabrication.
+Query Lambda environment variables: `CONVERSATION_TABLE_NAME`, `KNOWLEDGE_BASE_ID`, `MODEL_ID`, `RETRIEVAL_COUNT`, `MAX_GENERATION_TOKENS`, `MAX_MESSAGE_LENGTH`, `HISTORY_LIMIT`, `SESSION_TTL_SECONDS`. DynamoDB schema: partition key `session_id`, sort key `message_id`, fields `role`, `content`, `created_at`, `expires_at`. Prompt rules treat retrieved documents as untrusted evidence and require citation markers without fabrication. Frontend styling uses a ChatGPT-like dark layout with a left sidebar for New chat and local chat history, one scrollable main chat surface, and a fixed bottom composer.
 
 ## Validation evidence
 Unit tests were written for ingestion and query behavior. Local execution was attempted with `python -m compileall` and `python -m unittest`, but Python is not installed/on PATH on this workstation. Frontend uses DOM creation and `textContent`; no model output is inserted with `innerHTML`. `node --check frontend/app.js` was attempted, but Node.js is not installed/on PATH.
@@ -23,3 +23,4 @@ Requires AWS deployment validation for Bedrock model access, S3 Vectors regional
 ## Change log
 - 2026-07-28: Initialized Lambda handlers, frontend, API contracts, prompt rules, DynamoDB schema, and tests.
 - 2026-07-30: Documented pipeline validation impact on application packaging and tests.
+- 2026-07-30: Reworked frontend into a ChatGPT-like dark chat UI with New chat, local history, scrollable conversation, and minimal on-screen text.
