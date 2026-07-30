@@ -413,6 +413,8 @@ jobs:
             ${{ env.WORKING_DIRECTORY }}/tfplan.txt
             ${{ env.WORKING_DIRECTORY }}/tfplan.sha256
             ${{ env.WORKING_DIRECTORY }}/metadata.json
+            ${{ env.WORKING_DIRECTORY }}/modules/core/.terraform/*.zip
+            ${{ env.WORKING_DIRECTORY }}/modules/application/.terraform/*.zip
           retention-days: 3
           if-no-files-found: error
 
@@ -489,6 +491,19 @@ jobs:
           git checkout --detach "${commit_sha}"
           cp downloaded-plan/tfplan "${WORKING_DIRECTORY}/tfplan"
           echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Lambda ZIP artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${WORKING_DIRECTORY}/modules/core/.terraform"
+          mkdir -p "${WORKING_DIRECTORY}/modules/application/.terraform"
+          if compgen -G "downloaded-plan/modules/core/.terraform/*.zip" > /dev/null; then
+            cp downloaded-plan/modules/core/.terraform/*.zip "${WORKING_DIRECTORY}/modules/core/.terraform/"
+          fi
+          if compgen -G "downloaded-plan/modules/application/.terraform/*.zip" > /dev/null; then
+            cp downloaded-plan/modules/application/.terraform/*.zip "${WORKING_DIRECTORY}/modules/application/.terraform/"
+          fi
 
       - name: Bootstrap Terraform
         uses: ./.github/actions/terraform-bootstrap

@@ -4,7 +4,7 @@
 Document the GitHub Actions Terraform CI/CD pipeline for safe validation, planning, exact saved-plan promotion, apply, and destroy of the single Terraform root.
 
 ## Current state
-Pipeline status: `IMPLEMENTED LOCALLY - GITHUB-HOSTED RUN VALIDATION REQUIRED`.
+Pipeline status: `IMPLEMENTED AND PARTIALLY VALIDATED IN GITHUB ACTIONS`.
 
 Files implemented:
 
@@ -48,6 +48,10 @@ Artifact names:
 
 Artifacts retain for 3 days.
 
+Repository secret used by PR comment jobs:
+
+- `PR_COMMENT_TOKEN`
+
 ## Interfaces and dependencies
 Composite action responsibilities:
 
@@ -71,6 +75,7 @@ Manual trusted plan:
 
 - must run from the repository default branch
 - produces `tfplan`, `tfplan.txt`, `tfplan.sha256`, and `metadata.json`
+- also uploads the generated Lambda ZIP bundles from `infra/modules/*/.terraform/*.zip`
 - marks metadata with `applyable=true`, `event=workflow_dispatch`, `action=plan`
 
 Apply:
@@ -79,6 +84,7 @@ Apply:
 - validates the source run and exact workflow file
 - checks out the exact recorded commit
 - verifies plan and lockfile SHA-256
+- restores the Lambda ZIP bundles saved with the reviewed plan artifact
 - applies only `terraform apply -input=false -auto-approve tfplan`
 
 Destroy:
@@ -98,11 +104,18 @@ Local validation passed on 2026-07-30:
 - `terraform -chdir=infra validate`
 - `python -m unittest discover -s scripts/tests`
 
-The pipeline configuration was also aligned with the repository Python unit tests, IAM audit script, and cost guardrail script. GitHub-hosted execution is still required to validate OIDC claims, artifact promotion, and sticky PR comments end to end.
+GitHub Actions validation on July 30, 2026:
+
+- PR speculative run `30551176122` succeeded, including sticky PR plan comment posting
+- Manual trusted plan run `30551450633` succeeded on `main`
+- Manual apply run `30551578404` failed and exposed two fixes:
+  - CloudFront disabled-cache policy cannot use `query_string_behavior = "all"`
+  - exact-plan apply must restore Lambda ZIP artifacts generated during plan
 
 ## Open issues
-GitHub-hosted execution is still required to validate workflow expressions, OIDC claim behavior, artifact download from source runs, and PR comments. AWS account validation is required for role permissions, state bucket access, S3 lockfile access, S3 Vectors planning, and Bedrock ingestion checks.
+The patched workflow and Terraform need one more GitHub-hosted plan/apply cycle after the July 30, 2026 fixes to confirm the apply path completes successfully. SonarCloud is still failing separately and is not part of the Terraform promotion path.
 
 ## Change log
 - 2026-07-28: Initialized pipeline context with required behavior and risks.
 - 2026-07-30: Implemented the single-root Terraform workflow, exact-plan metadata flow, destroy safeguards, and updated path/state conventions after the module refactor.
+- 2026-07-30: Fixed PR comment permissions with `PR_COMMENT_TOKEN`, fixed CloudFront disabled-cache policy settings, and updated the manual plan/apply artifact flow to carry Lambda ZIP bundles into exact-plan apply.
