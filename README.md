@@ -98,26 +98,16 @@ TF_STATE_PREFIX=bedrock-rag
 TF_MONTHLY_BUDGET_LIMIT_USD=5
 ```
 
-Required GitHub Environments:
-
-```text
-terraform-dev-plan
-terraform-dev-apply
-terraform-dev-destroy
-```
-
-Require reviewers on `terraform-dev-apply` and `terraform-dev-destroy`. The plan environment usually does not need approval.
-
 Manual trusted plan:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=plan, stack=core, environment=dev
+Actions -> Terraform -> Run workflow -> action=plan, stack=core
 ```
 
 Manual apply uses the exact saved plan artifact:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=apply, stack=core, environment=dev, source_run_id=<manual-plan-run-id>
+Actions -> Terraform -> Run workflow -> action=apply, stack=core, source_run_id=<manual-plan-run-id>
 ```
 
 Manual destroy requires an exact confirmation such as:
@@ -126,7 +116,7 @@ Manual destroy requires an exact confirmation such as:
 DESTROY dev application
 ```
 
-Destroy uses a saved destroy plan generated in the same workflow run, then waits for the `terraform-dev-destroy` environment approval before applying that saved plan. Destroy `application` before `core`.
+Destroy uses a saved destroy plan generated in the same workflow run, then applies that saved plan in a separate job. Destroy `application` before `core`.
 
 The workflow uses maintained major action versions. Pinning every third-party action to a reviewed commit SHA remains a supply-chain hardening recommendation.
 

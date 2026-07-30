@@ -19,12 +19,10 @@ Query Lambda trust principal: `lambda.amazonaws.com`. Permissions: `bedrock:Retr
 GitHub OIDC deployment role is not modified by this repository. The required OIDC provider is `token.actions.githubusercontent.com` with audience `sts.amazonaws.com`.
 
 Trust-policy subject concepts to authorize deliberately:
-- Default-branch manual plan: `repo:OWNER/REPOSITORY:ref:refs/heads/DEFAULT_BRANCH`
+- Default-branch manual plan/apply/destroy: `repo:OWNER/REPOSITORY:ref:refs/heads/DEFAULT_BRANCH`
 - Pull-request plan: `repo:OWNER/REPOSITORY:pull_request`
-- Apply environment: `repo:OWNER/REPOSITORY:environment:terraform-dev-apply`
-- Destroy environment: `repo:OWNER/REPOSITORY:environment:terraform-dev-destroy`
 
-Do not copy these with fictional owner/repository names; replace with the real GitHub owner, repository, and default branch. Using a GitHub Environment changes the OIDC `sub` claim from a branch/ref subject to an environment subject, so the trust policy must include environment subjects for approved apply and destroy jobs.
+Do not copy these with fictional owner/repository names; replace with the real GitHub owner, repository, and default branch. GitHub Environments are not currently used; if approval environments are added later, the AWS trust policy must also allow the corresponding environment subject claims.
 
 Deployment-role permissions are distinct from Lambda runtime roles. The deployment role needs S3 backend state and `.tflock` object access, Terraform plan read permissions, and apply/destroy permissions for the project resources: Bedrock Knowledge Bases/data sources, Bedrock model invocation permissions where Terraform validates them, S3 Vectors, S3 buckets/objects/policies, Lambda, IAM role/policy management for project roles, API Gateway, CloudFront, DynamoDB, SQS, EventBridge, SNS, CloudWatch, Budgets, and SSM parameters. A separate `AWS_PLAN_ROLE_ARN` is recommended for PR plans with read-oriented permissions where possible.
 
@@ -37,3 +35,4 @@ Some AWS APIs may not support resource-level permissions exactly as modeled; Ter
 ## Change log
 - 2026-07-28: Created IAM matrix, scoped Lambda policies, KB service role notes, and static audit script.
 - 2026-07-30: Added GitHub OIDC trust guidance, deployment-role requirements, plan-role recommendation, and pipeline security scan evidence.
+- 2026-07-30: Updated OIDC notes after removing GitHub Environment gates for solo operation.

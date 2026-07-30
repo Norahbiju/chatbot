@@ -25,15 +25,7 @@ on:
         options:
           - core
           - application
-      environment:
-        type: choice
-        required: true
-        options:
-          - dev
       source_run_id:
-        required: false
-        type: string
-      pr_number:
         required: false
         type: string
       destroy_confirmation:
@@ -182,12 +174,10 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      pull-requests: write
       actions: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-pr-stacks.outputs.matrix) }}
-    environment: terraform-dev-plan
     env:
       STACK: ${{ matrix.stack }}
       ENVIRONMENT: dev
@@ -352,13 +342,12 @@ jobs:
       id-token: write
       contents: read
       pull-requests: write
-    environment: terraform-${{ inputs.environment }}-plan
     env:
       STACK: ${{ inputs.stack }}
-      ENVIRONMENT: ${{ inputs.environment }}
+      ENVIRONMENT: dev
       WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/${{ inputs.environment }}/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfplan-manual-${{ github.run_id }}-${{ inputs.stack }}-${{ inputs.environment }}
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
+      ARTIFACT_NAME: tfplan-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
       TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
       TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
     steps:
@@ -442,19 +431,6 @@ jobs:
             --terraform-version "${{ steps.tfversion.outputs.version }}" \
             --state-key "${STATE_KEY}"
 
-      - name: Render plan comment
-        shell: bash
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: |
-          set -Eeuo pipefail
-          python ../../../scripts/render_plan_comment.py \
-            --metadata metadata.json \
-            --plan-text tfplan.txt \
-            --artifact-name "${ARTIFACT_NAME}" \
-            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            --status "${{ steps.plan.outputs.status }}" \
-            --output plan-comment.md
-
       - name: Publish job summary
         shell: bash
         working-directory: ${{ env.WORKING_DIRECTORY }}
@@ -473,29 +449,6 @@ jobs:
             sed -n '1,400p' tfplan.txt
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Comment on PR when requested
-        if: inputs.pr_number != ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const issue_number = Number('${{ inputs.pr_number }}');
-            const {owner, repo} = context.repo;
-            const pr = await github.rest.pulls.get({owner, repo, pull_number: issue_number});
-            if (pr.data.head.repo.full_name !== `${owner}/${repo}`) {
-              core.setFailed('Refusing to comment applyable plan on a PR from another repository.');
-              return;
-            }
-            const body = fs.readFileSync(`${process.env.WORKING_DIRECTORY}/plan-comment.md`, 'utf8') + `\n\nUse source_run_id \`${context.runId}\` for apply.`;
-            const marker = `<!-- terraform-plan:${process.env.STACK}:${process.env.ENVIRONMENT} -->`;
-            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number});
-            const existing = comments.find((comment) => comment.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
-            } else {
-              await github.rest.issues.createComment({owner, repo, issue_number, body});
-            }
 
       - name: Upload applyable plan artifact
         uses: actions/upload-artifact@v4
@@ -517,16 +470,15 @@ jobs:
       id-token: write
       contents: read
       actions: read
-    environment: terraform-${{ inputs.environment }}-apply
     concurrency:
-      group: terraform-${{ inputs.environment }}-${{ inputs.stack }}
+      group: terraform-dev-${{ inputs.stack }}
       cancel-in-progress: false
     env:
       STACK: ${{ inputs.stack }}
-      ENVIRONMENT: ${{ inputs.environment }}
+      ENVIRONMENT: dev
       WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/${{ inputs.environment }}/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfplan-manual-${{ inputs.source_run_id }}-${{ inputs.stack }}-${{ inputs.environment }}
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
+      ARTIFACT_NAME: tfplan-manual-${{ inputs.source_run_id }}-${{ inputs.stack }}-dev
     steps:
       - name: Require source run ID and default branch
         shell: bash
@@ -625,13 +577,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    environment: terraform-${{ inputs.environment }}-plan
     env:
       STACK: ${{ inputs.stack }}
-      ENVIRONMENT: ${{ inputs.environment }}
+      ENVIRONMENT: dev
       WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/${{ inputs.environment }}/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-${{ inputs.environment }}
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
+      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -666,7 +617,7 @@ jobs:
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ inputs.environment }}/application/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_PREFIX }}/dev/application/terraform.tfstate
 
       - name: Check application state before core destroy
         if: inputs.stack == 'core'
@@ -770,16 +721,15 @@ jobs:
       id-token: write
       contents: read
       actions: read
-    environment: terraform-${{ inputs.environment }}-destroy
     concurrency:
-      group: terraform-${{ inputs.environment }}-${{ inputs.stack }}
+      group: terraform-dev-${{ inputs.stack }}
       cancel-in-progress: false
     env:
       STACK: ${{ inputs.stack }}
-      ENVIRONMENT: ${{ inputs.environment }}
+      ENVIRONMENT: dev
       WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/${{ inputs.environment }}/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-${{ inputs.environment }}
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
+      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
