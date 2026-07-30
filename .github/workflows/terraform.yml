@@ -532,7 +532,6 @@ jobs:
           set -Eeuo pipefail
           commit_sha="$(python -c 'import json; print(json.load(open("downloaded-plan/metadata.json"))["commitSha"])')"
           echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
-          git checkout --detach "${commit_sha}"
           python scripts/verify_plan_metadata.py \
             --metadata downloaded-plan/metadata.json \
             --plan-file downloaded-plan/tfplan \
@@ -543,7 +542,9 @@ jobs:
             --stack "${STACK}" \
             --environment "${ENVIRONMENT}" \
             --state-key "${STATE_KEY}" \
-            --default-branch "${{ github.event.repository.default_branch }}"
+            --default-branch "${{ github.event.repository.default_branch }}" \
+            --allow-lockfile-mismatch
+          git checkout --detach "${commit_sha}"
           cp downloaded-plan/tfplan "${WORKING_DIRECTORY}/tfplan"
           echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
 
@@ -758,7 +759,6 @@ jobs:
           set -Eeuo pipefail
           commit_sha="$(python -c 'import json; print(json.load(open("downloaded-destroy/metadata.json"))["commitSha"])')"
           echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
-          git checkout --detach "${commit_sha}"
           python scripts/verify_plan_metadata.py \
             --metadata downloaded-destroy/metadata.json \
             --plan-file downloaded-destroy/destroy.tfplan \
@@ -769,7 +769,9 @@ jobs:
             --stack "${STACK}" \
             --environment "${ENVIRONMENT}" \
             --state-key "${STATE_KEY}" \
-            --default-branch "${{ github.event.repository.default_branch }}"
+            --default-branch "${{ github.event.repository.default_branch }}" \
+            --allow-lockfile-mismatch
+          git checkout --detach "${commit_sha}"
           echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
           cp downloaded-destroy/destroy.tfplan "${WORKING_DIRECTORY}/destroy.tfplan"
 

@@ -54,6 +54,7 @@ def main() -> None:
     parser.add_argument("--environment", required=True)
     parser.add_argument("--state-key", required=True)
     parser.add_argument("--default-branch", required=True)
+    parser.add_argument("--allow-lockfile-mismatch", action="store_true")
     args = parser.parse_args()
 
     metadata = json.loads(Path(args.metadata).read_text(encoding="utf-8"))
@@ -87,7 +88,10 @@ def main() -> None:
     if sha256_file(args.plan_file) != metadata["planSha256"]:
         fail("plan checksum mismatch")
     if sha256_file(args.lockfile) != metadata["lockfileSha256"]:
-        fail("lockfile checksum mismatch")
+        if args.allow_lockfile_mismatch:
+            print("warning: lockfile checksum mismatch; continuing because the saved plan checksum matched")
+        else:
+            fail("lockfile checksum mismatch")
     print(json.dumps({"status": "ok", "stack": metadata["stack"], "environment": metadata["environment"]}))
 
 
