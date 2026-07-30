@@ -1,22 +1,18 @@
 SHELL := /bin/sh
 
-.PHONY: fmt validate validate-core validate-application test audit-iam check-cost plan-core plan-application
+.PHONY: fmt validate validate-infra test audit-iam check-cost plan
 
 fmt:
 	terraform fmt -recursive
 
-validate: fmt validate-core validate-application test audit-iam check-cost
+validate: fmt validate-infra test audit-iam check-cost
 
-validate-core:
-	terraform -chdir=infra/stacks/core init -backend=false
-	terraform -chdir=infra/stacks/core validate
-
-validate-application:
-	terraform -chdir=infra/stacks/application init -backend=false
-	terraform -chdir=infra/stacks/application validate
+validate-infra:
+	terraform -chdir=infra init -backend=false
+	terraform -chdir=infra validate
 
 test:
-	python -m compileall src || true
+	python -m compileall src scripts || true
 	python -m unittest discover -s src/ingestion_lambda/tests || true
 	python -m unittest discover -s src/query_lambda/tests || true
 	python -m unittest discover -s scripts/tests || true
@@ -28,12 +24,7 @@ audit-iam:
 check-cost:
 	python scripts/check_cost_guardrails.py
 
-plan-core:
+plan:
 	test -n "$(BACKEND_CONFIG)" && test -n "$(TFVARS)"
-	terraform -chdir=infra/stacks/core init -backend-config="$(BACKEND_CONFIG)"
-	terraform -chdir=infra/stacks/core plan -var-file="$(TFVARS)" -out=core.tfplan
-
-plan-application:
-	test -n "$(BACKEND_CONFIG)" && test -n "$(TFVARS)"
-	terraform -chdir=infra/stacks/application init -backend-config="$(BACKEND_CONFIG)"
-	terraform -chdir=infra/stacks/application plan -var-file="$(TFVARS)" -out=application.tfplan
+	terraform -chdir=infra init -backend-config="$(BACKEND_CONFIG)"
+	terraform -chdir=infra plan -var-file="$(TFVARS)" -out=infra.tfplan

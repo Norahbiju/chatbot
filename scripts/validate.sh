@@ -2,13 +2,11 @@
 set -eu
 
 terraform fmt -check -recursive
-terraform -chdir=infra/stacks/core init -backend=false
-terraform -chdir=infra/stacks/core validate
-terraform -chdir=infra/stacks/application init -backend=false
-terraform -chdir=infra/stacks/application validate
+terraform -chdir=infra init -backend=false
+terraform -chdir=infra validate
 
 if command -v python >/dev/null 2>&1; then
-  python -m compileall src
+  python -m compileall src scripts
   python -m unittest discover -s src/ingestion_lambda/tests
   python -m unittest discover -s src/query_lambda/tests
   python -m unittest discover -s scripts/tests

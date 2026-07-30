@@ -1,27 +1,38 @@
 # Infrastructure Context
 
 ## Purpose
-Document the two-stack Terraform architecture for a low-cost Amazon Bedrock RAG chatbot using S3 documents, Bedrock Knowledge Bases, S3 Vectors, DynamoDB, HTTP API, CloudFront, SNS alarms, and AWS Budgets.
+Document the single-root Terraform architecture for a low-cost Amazon Bedrock RAG chatbot using S3 documents, Bedrock Knowledge Bases, S3 Vectors, DynamoDB, HTTP API, CloudFront, SNS alarms, and AWS Budgets.
 
 ## Current state
-Implemented locally as two independent Terraform roots: `infra/stacks/core` and `infra/stacks/application`. The core stack owns source documents, S3 Vectors, Bedrock KB/data source, ingestion queue/Lambda, SNS, alarms, and SSM parameters. The application stack reads SSM parameters at plan time and owns DynamoDB, query Lambda, HTTP API, frontend S3 bucket, CloudFront, alarms, and budget.
+Implemented locally as one Terraform root at `infra/`. The root calls two internal modules:
+
+- `infra/modules/core` for source documents, S3 Vectors, Bedrock KB/data source, ingestion queue/Lambda, SNS, alarms, and SSM parameters
+- `infra/modules/application` for DynamoDB, query Lambda, HTTP API, frontend S3 bucket, CloudFront, alarms, and budget
+
+The root reads the SSM parameters created by the core module during deployment and passes those resolved values into the application module so the full system can be planned and applied together in one state.
 
 ## Locked decisions
-Region `ap-south-1`; prefix `project_name-environment`; default tags `Project`, `Environment`, `ManagedBy`, `Repository`, optional `CostCenter`; backend is partial `backend "s3" {}` with separate keys `bedrock-rag/dev/core/terraform.tfstate` and `bedrock-rag/dev/application/terraform.tfstate`; no Terraform workspaces.
+Region `ap-south-1`; prefix `project_name-environment`; default tags `Project`, `Environment`, `ManagedBy`, `Repository`, optional `CostCenter`; backend is partial `backend "s3" {}` with one state key, default example `bedrock-rag/dev/terraform.tfstate`; no Terraform workspaces.
 
-SSM names: `/bedrock-rag/dev/bedrock/knowledge-base-id`, `/bedrock-rag/dev/bedrock/model-id`, `/bedrock-rag/dev/bedrock/alert-topic-arn`.
+SSM names:
+
+- `/bedrock-rag/dev/bedrock/knowledge-base-id`
+- `/bedrock-rag/dev/bedrock/model-id`
+- `/bedrock-rag/dev/bedrock/alert-topic-arn`
 
 ## Interfaces and dependencies
-Deployment order: core before application. Destroy order: application before core. Application planning depends on SSM parameters produced by core. Source documents depend on the ingestion event path so initial uploads are not missed. S3 buckets use private access, versioning, SSE-S3, TLS-only policies, lifecycle rules, and `force_destroy = true` by default for dev.
+One Terraform apply now creates the entire system. Internally, the core module must finish creating the SSM parameters before the root reads them and supplies the values to the application module. Source documents still depend on the completed ingestion event path so the first uploads are not missed.
 
-Pipeline backend generation uses temporary HCL files under `RUNNER_TEMP`; tracked backend files remain partial `backend "s3" {}`. Pipeline state keys are `<TF_STATE_PREFIX>/dev/core/terraform.tfstate` and `<TF_STATE_PREFIX>/dev/application/terraform.tfstate`. Apply is constrained to exact saved plan artifacts from default-branch manual plans. Destroy is constrained to exact saved destroy plans and blocks core destroy while application state still has resources.
+S3 buckets use private access, versioning, SSE-S3, TLS-only policies, lifecycle rules, and `force_destroy = true` by default for this dev-oriented setup. Lambda packaging, bucket hardening, alarms, and IAM are implemented directly inside the two child modules instead of through extra helper modules.
+
+Pipeline backend generation uses temporary HCL files under `RUNNER_TEMP`; tracked backend configuration remains partial `backend "s3" {}`. The pipeline state key is `<TF_STATE_PREFIX>/dev/terraform.tfstate`. Apply is constrained to exact saved plan artifacts from default-branch manual plans. Destroy is constrained to exact saved destroy plans and checks for active Knowledge Base ingestion before proceeding.
 
 ## Validation evidence
-Official documentation reviewed: HashiCorp documents S3 backend `use_lockfile` and S3 Vectors resources; AWS documents S3 Vectors with Bedrock Knowledge Bases and Titan Text Embeddings V2. `terraform init -backend=false` succeeded for both stacks and created `.terraform.lock.hcl` files with `hashicorp/aws v6.56.0` and `hashicorp/archive v2.8.0`. `terraform fmt -check -recursive`, `terraform -chdir=infra/stacks/core validate`, and `terraform -chdir=infra/stacks/application validate` passed. Provider schema dump was attempted but remained unavailable because the partial S3 backend caused Terraform to require backend initialization for that subcommand; provider-backed `validate` was used as substitute validation.
+Official documentation reviewed: HashiCorp documents S3 backend `use_lockfile` and S3 Vectors resources; AWS documents S3 Vectors with Bedrock Knowledge Bases and Titan Text Embeddings V2. `terraform fmt -check -recursive` passed. `terraform -chdir=infra init -backend=false` and `terraform -chdir=infra validate` passed. `python scripts/validate_iam.py`, `python scripts/check_cost_guardrails.py`, `python -m compileall src scripts`, `python -m unittest discover -s src/ingestion_lambda/tests`, `python -m unittest discover -s src/query_lambda/tests`, and `python -m unittest discover -s scripts/tests` all passed on 2026-07-30 using a local virtual environment with `boto3` and `botocore` installed for the test run.
 
 ## Open issues
-Model and service availability must be confirmed in the target AWS account. No deployment or AWS-backed plan was run. The exact S3 Vectors ARN format is derived because the provider resources do not export `arn` attributes; AWS deployment validation should confirm IAM resource matching.
+Model and service availability must still be confirmed in the target AWS account. No AWS-backed plan or deployment was run during this refactor. The exact S3 Vectors ARN format is still derived because the provider resources do not export ARN attributes directly; AWS deployment validation should confirm IAM resource matching.
 
 ## Change log
-- 2026-07-28: Created Terraform modules, root stacks, environment examples, SSM dependency model, cost controls, and deployment documentation.
-- 2026-07-30: Added pipeline state-key conventions, temporary backend generation, exact-plan constraints, destroy-order enforcement, and renamed the application budget variable to `monthly_budget_limit_usd` to match `TF_VAR_monthly_budget_limit_usd`.
+- 2026-07-28: Created the original Terraform architecture, cost controls, and deployment documentation.
+- 2026-07-30: Simplified the previous multi-root layout into one Terraform root with `core` and `application` child modules, preserved SSM handoff behavior, and updated validation evidence.

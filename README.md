@@ -1,6 +1,6 @@
 # Bedrock RAG Chatbot on AWS
 
-This repository contains a low-cost Amazon Bedrock RAG chatbot implemented with two independent Terraform root stacks, Python Lambda functions, and a vanilla HTML/CSS/JavaScript frontend.
+This repository contains a low-cost Amazon Bedrock RAG chatbot implemented as one Terraform root under `infra/`, with two internal modules: `modules/core` for the knowledge-plane resources and `modules/application` for the chatbot application resources.
 
 ```mermaid
 flowchart LR
@@ -20,60 +20,84 @@ flowchart LR
 
 ## Repository Structure
 
-The code is organized into source documents, Lambda functions, frontend assets, Terraform modules, two root stacks, environment examples, validation scripts, and AI context files under `ai_context/`.
+- `infra/` is the single Terraform root.
+- `infra/modules/core/` creates documents, vectors, the Knowledge Base, ingestion, SNS, alarms, and SSM parameters.
+- `infra/modules/application/` creates DynamoDB, query Lambda, API Gateway, frontend hosting, CloudFront, alarms, and the monthly budget.
+- `src/` contains the ingestion and query Lambda handlers plus unit tests.
+- `frontend/` contains the vanilla HTML, CSS, and JavaScript chat UI.
+- `documents/` contains the sample knowledge-base corpus.
+- `ai_context/` records the current architecture, IAM, pipeline, and application behavior.
 
 ## Prerequisites
 
-Install Terraform `1.12.2` or newer compatible with the pinned provider lock files. Install Python 3.12 locally to run Lambda unit tests. Configure AWS credentials only when you are ready to plan or deploy.
+- Terraform `1.12.2` or newer compatible with the pinned lock file
+- Python `3.12` for local unit tests
+- AWS access only when you are ready to plan or deploy
 
-You must enable model access for `amazon.titan-embed-text-v2:0` and `amazon.nova-micro-v1:0` in `ap-south-1` before deployment. S3 Vectors and Bedrock Knowledge Bases with S3 Vectors also need to be available in the selected account and region.
+Enable model access for `amazon.titan-embed-text-v2:0` and `amazon.nova-micro-v1:0` in `ap-south-1` before deployment. S3 Vectors and Bedrock Knowledge Bases with S3 Vectors must also be available in the target account and region.
 
 ## Cost Warning
 
-This project is designed for a small Free Tier or credit account, but it is not free by guarantee. Budgets can alert late. Immediate guardrails are low API throttling, Lambda reserved concurrency, small retrieval counts, short log retention, DynamoDB provisioned `5/5`, and no NAT Gateway, VPC, OpenSearch, Aurora, KMS customer key, or provisioned Bedrock throughput.
+This project is designed for a small Free Tier or credit account, but it is not guaranteed free. Cost guardrails include:
+
+- low API throttling
+- Lambda reserved concurrency
+- small retrieval count
+- short log retention
+- DynamoDB provisioned `5/5`
+- no NAT Gateway, VPC, OpenSearch, Aurora, or customer-managed KMS key
+- no provisioned Bedrock throughput
 
 ## Backend Values
 
-Both stacks use the same existing S3 backend bucket with different state keys. Example files are in `infra/environments/dev/`.
+The Terraform root uses a shared existing S3 backend bucket with one state key. Copy `infra/backend.hcl.example` to `infra/backend.hcl` and update it for your shared backend bucket.
+
+Example key:
+
+```text
+bedrock-rag/dev/terraform.tfstate
+```
 
 ## Validate Locally
 
 ```bash
 terraform fmt -check -recursive
-terraform -chdir=infra/stacks/core init -backend=false
-terraform -chdir=infra/stacks/core validate
-terraform -chdir=infra/stacks/application init -backend=false
-terraform -chdir=infra/stacks/application validate
+terraform -chdir=infra init -backend=false
+terraform -chdir=infra validate
 python -m unittest discover -s src/ingestion_lambda/tests
 python -m unittest discover -s src/query_lambda/tests
+python -m unittest discover -s scripts/tests
 python scripts/validate_iam.py
 python scripts/check_cost_guardrails.py
 ```
 
-## Deployment Order
+## Deployment Model
 
-1. Configure core backend.
-2. Plan and apply core.
-3. Confirm the SNS email subscription if configured.
-4. Verify SSM parameters exist.
-5. Wait for initial Knowledge Base ingestion to complete.
-6. Configure application backend.
-7. Plan and apply application.
-8. Open the CloudFront domain.
-9. Test the chatbot.
+There is one Terraform root, but the resources are still separated internally:
 
-The application stack reads the Knowledge Base ID, model ID, and SNS topic ARN from SSM Parameter Store. It cannot plan successfully before the core stack has created those parameters.
+- `modules/core` creates the Bedrock knowledge-plane components and writes IDs to SSM Parameter Store.
+- the root then reads those SSM parameters during deployment
+- `modules/application` receives those resolved values and creates the user-facing application resources
+
+That means the whole system can be planned and applied in one run while still keeping the internal module boundary clear.
 
 ## GitHub Actions Pipeline
 
-The repository includes a unified Terraform workflow at `.github/workflows/terraform.yml`.
+The repository includes a single-root Terraform workflow at `.github/workflows/terraform.yml`.
 
-It supports pull-request static validation, same-repository speculative PR plans, manually triggered trusted plans, exact saved-plan apply, and exact saved-plan destroy. No workflow automatically applies on push, and no static AWS access keys are used.
+It supports:
+
+- pull-request static validation
+- same-repository speculative PR plans
+- manually triggered trusted plans
+- exact saved-plan apply
+- exact saved-plan destroy
+
+No workflow automatically applies on push, and no long-lived AWS access keys are stored in GitHub.
 
 Required repository variables:
 
 ```text
-AWS_ROLE_ARN
 AWS_REGION
 AWS_ACCOUNT_ID
 TF_STATE_BUCKET
@@ -81,12 +105,6 @@ TF_STATE_REGION
 TF_STATE_PREFIX
 TF_ALERT_EMAIL
 TF_MONTHLY_BUDGET_LIMIT_USD
-```
-
-Optional repository variable:
-
-```text
-AWS_PLAN_ROLE_ARN
 ```
 
 Suggested values:
@@ -101,36 +119,29 @@ TF_MONTHLY_BUDGET_LIMIT_USD=5
 Manual trusted plan:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=plan, stack=core
+Actions -> Terraform -> Run workflow -> action=plan
 ```
 
 Manual apply uses the exact saved plan artifact:
 
 ```text
-Actions -> Terraform -> Run workflow -> action=apply, stack=core, source_run_id=<manual-plan-run-id>
+Actions -> Terraform -> Run workflow -> action=apply, source_run_id=<manual-plan-run-id>
 ```
 
-Manual destroy requires an exact confirmation such as:
+Manual destroy requires an exact confirmation string:
 
 ```text
-DESTROY dev application
+DESTROY dev infra
 ```
-
-Destroy uses a saved destroy plan generated in the same workflow run, then applies that saved plan in a separate job. Destroy `application` before `core`.
-
-The workflow uses maintained major action versions. Pinning every third-party action to a reviewed commit SHA remains a supply-chain hardening recommendation.
 
 ## Commands
 
 ```bash
-terraform -chdir=infra/stacks/core init -backend-config=../../environments/dev/core.backend.hcl
-terraform -chdir=infra/stacks/core plan -var-file=../../environments/dev/core.tfvars.example
-
-terraform -chdir=infra/stacks/application init -backend-config=../../environments/dev/application.backend.hcl
-terraform -chdir=infra/stacks/application plan -var-file=../../environments/dev/application.tfvars.example
+terraform -chdir=infra init -backend-config=backend.hcl
+terraform -chdir=infra plan -var-file=terraform.tfvars
 ```
 
-Do not run `apply` until you have reviewed the plans and confirmed Bedrock access and budget expectations.
+Copy `infra/terraform.tfvars.example` to `infra/terraform.tfvars` before planning.
 
 ## API
 
@@ -152,18 +163,13 @@ The frontend stores only a random browser session ID in `localStorage`, sends me
 
 ## Alarms and Budget
 
-CloudWatch alarms monitor ingestion Lambda error rate, query Lambda error rate, API Gateway 5xx rate, and DynamoDB throttling. An AWS monthly cost budget defaults to `$5` and sends notifications to the shared SNS topic. Budget data can be delayed.
+CloudWatch alarms monitor ingestion Lambda error rate, query Lambda error rate, API Gateway 5xx rate, and DynamoDB throttling. An AWS monthly cost budget defaults to `$5` and sends notifications to the shared SNS topic.
 
 ## Troubleshooting
 
-If the application stack cannot read SSM parameters, deploy the core stack first. If Bedrock returns access denied, enable model access and verify regional availability. If no citations appear, confirm source documents were uploaded and ingestion completed.
-
-## Destroy Order
-
-1. Destroy the application stack.
-2. Confirm application state is empty.
-3. Wait until no Knowledge Base ingestion job is active.
-4. Destroy the core stack.
+- If Bedrock returns access denied, enable model access and verify regional availability.
+- If no citations appear, confirm source documents were uploaded and ingestion completed.
+- If plan/apply cannot read the backend, verify the shared state bucket, lockfile permissions, and OIDC role access.
 
 ## Security Notes
 

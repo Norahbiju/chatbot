@@ -19,12 +19,6 @@ on:
           - plan
           - apply
           - destroy
-      stack:
-        type: choice
-        required: true
-        options:
-          - core
-          - application
       source_run_id:
         required: false
         type: string
@@ -42,6 +36,9 @@ concurrency:
 
 env:
   WORKFLOW_FILE: .github/workflows/terraform.yml
+  STACK: infra
+  ENVIRONMENT: dev
+  WORKING_DIRECTORY: infra
 
 jobs:
   static-validation:
@@ -89,16 +86,14 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          terraform -chdir=infra/stacks/core init -backend=false
-          terraform -chdir=infra/stacks/core validate
-          terraform -chdir=infra/stacks/application init -backend=false
-          terraform -chdir=infra/stacks/application validate
+          terraform -chdir=infra init -backend=false
+          terraform -chdir=infra validate
 
       - name: Python tests and audits
         shell: bash
         run: |
           set -Eeuo pipefail
-          python -m compileall src
+          python -m compileall src scripts
           python -m unittest discover -s src/ingestion_lambda/tests
           python -m unittest discover -s src/query_lambda/tests
           python -m unittest discover -s scripts/tests
@@ -115,42 +110,20 @@ jobs:
             echo "Node.js unavailable; skipped JavaScript syntax validation."
           fi
 
-  detect-pr-stacks:
-    name: Detect PR stacks
-    runs-on: ubuntu-latest
-    needs: static-validation
-    outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detect affected stacks
-        id: detect
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
-            matrix='{"include":[]}'
-          else
-            matrix="$(bash scripts/detect_terraform_stacks.sh "origin/${GITHUB_BASE_REF}" "HEAD")"
-          fi
-          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
-          echo "${matrix}" >> "${GITHUB_STEP_SUMMARY}"
-
   fork-pr-note:
     name: Fork PR plan note
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
-    needs: detect-pr-stacks
+    needs: static-validation
     permissions:
       contents: read
+      issues: write
       pull-requests: write
     steps:
       - name: Explain skipped AWS plan
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PR_COMMENT_TOKEN }}
           script: |
             const marker = '<!-- terraform-plan:fork-skip -->';
             const body = `${marker}
@@ -168,34 +141,18 @@ jobs:
             }
 
   pr-plan:
-    name: Speculative PR plan (${{ matrix.stack }})
+    name: Speculative PR plan
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    needs:
-      - static-validation
+    needs: static-validation
     permissions:
       id-token: write
       contents: read
+      issues: write
       actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - stack: core
-            working_directory: infra/stacks/core
-            tfvars: infra/environments/dev/core.tfvars
-            state_suffix: core/terraform.tfstate
-          - stack: application
-            working_directory: infra/stacks/application
-            tfvars: infra/environments/dev/application.tfvars
-            state_suffix: application/terraform.tfstate
     env:
-      STACK: ${{ matrix.stack }}
-      ENVIRONMENT: dev
-      WORKING_DIRECTORY: ${{ matrix.working_directory }}
-      TFVARS: ${{ matrix.tfvars }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ matrix.state_suffix }}
-      ARTIFACT_NAME: tfplan-pr-${{ github.run_id }}-${{ matrix.stack }}-dev
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
+      ARTIFACT_NAME: tfplan-pr-${{ github.run_id }}-infra-dev
       TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
       TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
     steps:
@@ -236,8 +193,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           args=(-input=false -lock-timeout=5m -detailed-exitcode -out=tfplan)
-          if [[ -f "../../environments/${ENVIRONMENT}/${STACK}.tfvars" ]]; then
-            args+=("-var-file=../../environments/${ENVIRONMENT}/${STACK}.tfvars")
+          if [[ -f terraform.tfvars ]]; then
+            args+=("-var-file=terraform.tfvars")
           fi
           set +e
           terraform plan "${args[@]}" > tfplan.raw.txt 2>&1
@@ -250,11 +207,6 @@ jobs:
             echo "status=changes" >> "${GITHUB_OUTPUT}"
           else
             echo "status=failed" >> "${GITHUB_OUTPUT}"
-            if [[ "${STACK}" == "application" ]] && grep -Eiq "ParameterNotFound|couldn.t find resource|SSM Parameter" tfplan.raw.txt; then
-              echo "bootstrap_blocked=true" >> "${GITHUB_OUTPUT}"
-            else
-              echo "bootstrap_blocked=false" >> "${GITHUB_OUTPUT}"
-            fi
           fi
           if [[ -f tfplan ]]; then
             terraform show -no-color tfplan > tfplan.txt
@@ -271,7 +223,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
           set -Eeuo pipefail
-          python ../../../scripts/create_plan_metadata.py \
+          python ../scripts/create_plan_metadata.py \
             --output metadata.json \
             --plan-file tfplan \
             --lockfile .terraform.lock.hcl \
@@ -293,17 +245,12 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
           set -Eeuo pipefail
-          bootstrap_flag=()
-          if [[ "${{ steps.plan.outputs.bootstrap_blocked }}" == "true" ]]; then
-            bootstrap_flag=(--bootstrap-blocked)
-          fi
-          python ../../../scripts/render_plan_comment.py \
+          python ../scripts/render_plan_comment.py \
             --metadata metadata.json \
             --plan-text tfplan.txt \
             --artifact-name "${ARTIFACT_NAME}" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --status "${{ steps.plan.outputs.status }}" \
-            "${bootstrap_flag[@]}" \
             --output plan-comment.md
 
       - name: Upload speculative plan artifact
@@ -321,6 +268,7 @@ jobs:
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PR_COMMENT_TOKEN }}
           script: |
             const fs = require('fs');
             const body = fs.readFileSync(`${process.env.WORKING_DIRECTORY}/plan-comment.md`, 'utf8');
@@ -352,11 +300,8 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      STACK: ${{ inputs.stack }}
-      ENVIRONMENT: dev
-      WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfplan-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
+      ARTIFACT_NAME: tfplan-manual-${{ github.run_id }}-infra-dev
       TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
       TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
     steps:
@@ -400,8 +345,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           args=(-input=false -lock-timeout=5m -detailed-exitcode -out=tfplan)
-          if [[ -f "../../environments/${ENVIRONMENT}/${STACK}.tfvars" ]]; then
-            args+=("-var-file=../../environments/${ENVIRONMENT}/${STACK}.tfvars")
+          if [[ -f terraform.tfvars ]]; then
+            args+=("-var-file=terraform.tfvars")
           fi
           set +e
           terraform plan "${args[@]}"
@@ -422,7 +367,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
           set -Eeuo pipefail
-          python ../../../scripts/create_plan_metadata.py \
+          python ../scripts/create_plan_metadata.py \
             --output metadata.json \
             --plan-file tfplan \
             --lockfile .terraform.lock.hcl \
@@ -480,14 +425,11 @@ jobs:
       contents: read
       actions: read
     concurrency:
-      group: terraform-dev-${{ inputs.stack }}
+      group: terraform-dev-infra
       cancel-in-progress: false
     env:
-      STACK: ${{ inputs.stack }}
-      ENVIRONMENT: dev
-      WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfplan-manual-${{ inputs.source_run_id }}-${{ inputs.stack }}-dev
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
+      ARTIFACT_NAME: tfplan-manual-${{ inputs.source_run_id }}-infra-dev
     steps:
       - name: Require source run ID and default branch
         shell: bash
@@ -573,7 +515,7 @@ jobs:
             echo "- Environment: \`${ENVIRONMENT}\`"
             echo "- Source plan run ID: \`${{ inputs.source_run_id }}\`"
             echo "- Commit: \`${{ steps.metadata.outputs.commit_sha }}\`"
-            echo "- Plan SHA-256: \`$(python -c 'import json; print(json.load(open("../../../downloaded-plan/metadata.json"))["planSha256"])')\`"
+            echo "- Plan SHA-256: \`$(python -c 'import json; print(json.load(open("../downloaded-plan/metadata.json"))["planSha256"])')\`"
             echo
             echo '```terraform'
             sed -n '1,400p' apply-output.txt
@@ -588,11 +530,8 @@ jobs:
       id-token: write
       contents: read
     env:
-      STACK: ${{ inputs.stack }}
-      ENVIRONMENT: dev
-      WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
+      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-infra-dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -607,7 +546,7 @@ jobs:
             echo "Destroy must run from the repository default branch." >&2
             exit 1
           fi
-          CHECK_STATE=false bash scripts/check_destroy_order.sh "${STACK}" "${ENVIRONMENT}" "${{ inputs.destroy_confirmation }}"
+          bash scripts/check_destroy_order.sh "${STACK}" "${ENVIRONMENT}" "${{ inputs.destroy_confirmation }}"
 
       - name: Read Terraform version
         id: tfversion
@@ -616,27 +555,7 @@ jobs:
           set -Eeuo pipefail
           echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
 
-      - name: Bootstrap application backend before core destroy
-        if: inputs.stack == 'core'
-        uses: ./.github/actions/terraform-bootstrap
-        with:
-          working-directory: infra/stacks/application
-          terraform-version: ${{ steps.tfversion.outputs.version }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
-          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
-          state-bucket: ${{ vars.TF_STATE_BUCKET }}
-          state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/dev/application/terraform.tfstate
-
-      - name: Check application state before core destroy
-        if: inputs.stack == 'core'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          bash scripts/check_destroy_order.sh "${STACK}" "${ENVIRONMENT}" "${{ inputs.destroy_confirmation }}"
-
-      - name: Bootstrap target stack
+      - name: Bootstrap Terraform
         uses: ./.github/actions/terraform-bootstrap
         with:
           working-directory: ${{ env.WORKING_DIRECTORY }}
@@ -648,8 +567,7 @@ jobs:
           state-region: ${{ vars.TF_STATE_REGION }}
           state-key: ${{ env.STATE_KEY }}
 
-      - name: Check active ingestion before core destroy
-        if: inputs.stack == 'core'
+      - name: Check active ingestion before destroy
         shell: bash
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
@@ -659,7 +577,7 @@ jobs:
           if [[ -n "${kb_id}" && -n "${ds_id}" ]]; then
             active="$(aws bedrock-agent list-ingestion-jobs --knowledge-base-id "${kb_id}" --data-source-id "${ds_id}" --query 'ingestionJobSummaries[?status==`STARTING` || status==`IN_PROGRESS`].ingestionJobId' --output text)"
             if [[ -n "${active}" ]]; then
-              echo "Core destroy blocked because a Knowledge Base ingestion job is active: ${active}" >&2
+              echo "Destroy blocked because a Knowledge Base ingestion job is active: ${active}" >&2
               exit 1
             fi
           else
@@ -674,7 +592,7 @@ jobs:
           terraform plan -destroy -input=false -lock-timeout=5m -out=destroy.tfplan
           terraform show -no-color destroy.tfplan > destroy.tfplan.txt
           sha256sum destroy.tfplan | awk '{print $1}' > destroy.tfplan.sha256
-          python ../../../scripts/create_plan_metadata.py \
+          python ../scripts/create_plan_metadata.py \
             --output metadata.json \
             --plan-file destroy.tfplan \
             --lockfile .terraform.lock.hcl \
@@ -732,14 +650,11 @@ jobs:
       contents: read
       actions: read
     concurrency:
-      group: terraform-dev-${{ inputs.stack }}
+      group: terraform-dev-infra
       cancel-in-progress: false
     env:
-      STACK: ${{ inputs.stack }}
-      ENVIRONMENT: dev
-      WORKING_DIRECTORY: infra/stacks/${{ inputs.stack }}
-      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ inputs.stack }}/terraform.tfstate
-      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-${{ inputs.stack }}-dev
+      STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
+      ARTIFACT_NAME: tfdestroy-manual-${{ github.run_id }}-infra-dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4

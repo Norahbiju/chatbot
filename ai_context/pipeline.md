@@ -1,12 +1,13 @@
 # Pipeline Context
 
 ## Purpose
-Document the implemented GitHub Actions Terraform CI/CD pipeline for safe validation, planning, exact saved-plan promotion, apply, and destroy of the two Terraform stacks.
+Document the GitHub Actions Terraform CI/CD pipeline for safe validation, planning, exact saved-plan promotion, apply, and destroy of the single Terraform root.
 
 ## Current state
 Pipeline status: `IMPLEMENTED LOCALLY - GITHUB-HOSTED RUN VALIDATION REQUIRED`.
 
 Files implemented:
+
 - `.github/actions/terraform-bootstrap/action.yml`
 - `.github/workflows/terraform.yml`
 - `scripts/detect_terraform_stacks.sh`
@@ -19,95 +20,89 @@ Files implemented:
 
 ## Locked decisions
 Workflow triggers:
-- `pull_request` for infra, source, frontend, documents, workflow/action, and `.terraform-version` changes.
-- `workflow_dispatch` with `action` of `plan`, `apply`, or `destroy`; `stack` of `core` or `application`; optional `source_run_id` and `destroy_confirmation`. The pipeline currently targets `dev` only.
+
+- `pull_request` for infra, source, frontend, documents, workflow/action, and `.terraform-version` changes
+- `workflow_dispatch` with `action` of `plan`, `apply`, or `destroy`; optional `source_run_id` and `destroy_confirmation`
 
 Repository variables:
-- Required: `AWS_REGION`, `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_STATE_PREFIX`, `TF_ALERT_EMAIL`, `TF_MONTHLY_BUDGET_LIMIT_USD`.
-- The current solo workflow pins the deployment role ARN directly in `.github/workflows/terraform.yml` as `arn:aws:iam::484632959006:role/aws-chatbot` to avoid GitHub variable/context mismatch while debugging OIDC.
 
-GitHub Environments:
-- Not used in the current solo-operator workflow.
-- If approval gates are needed later, add plan/apply/destroy environments at the end after the basic pipeline has run successfully.
+- `AWS_REGION`
+- `AWS_ACCOUNT_ID`
+- `TF_STATE_BUCKET`
+- `TF_STATE_REGION`
+- `TF_STATE_PREFIX`
+- `TF_ALERT_EMAIL`
+- `TF_MONTHLY_BUDGET_LIMIT_USD`
 
-State keys:
-- `core`: `<TF_STATE_PREFIX>/dev/core/terraform.tfstate`
-- `application`: `<TF_STATE_PREFIX>/dev/application/terraform.tfstate`
+The workflow currently pins the deployment role ARN directly in `.github/workflows/terraform.yml` as `arn:aws:iam::484632959006:role/aws-chatbot`.
+
+State key:
+
+- `<TF_STATE_PREFIX>/dev/terraform.tfstate`
 
 Artifact names:
-- PR speculative: `tfplan-pr-<run-id>-<stack>-<environment>`
-- Manual applyable plan: `tfplan-manual-<run-id>-<stack>-<environment>`
-- Destroy plan: `tfdestroy-manual-<run-id>-<stack>-<environment>`
+
+- PR speculative: `tfplan-pr-<run-id>-infra-dev`
+- Manual applyable plan: `tfplan-manual-<run-id>-infra-dev`
+- Destroy plan: `tfdestroy-manual-<run-id>-infra-dev`
 
 Artifacts retain for 3 days.
 
 ## Interfaces and dependencies
 Composite action responsibilities:
-- Set up pinned Terraform.
-- Configure Terraform plugin cache.
-- Configure AWS credentials through `aws-actions/configure-aws-credentials` and OIDC.
-- Verify the assumed AWS account through an explicit `aws sts get-caller-identity` check.
-- Print non-secret GitHub OIDC claims before assuming AWS credentials so trust-policy mismatches can be diagnosed.
-- Run `aws sts get-caller-identity`.
-- Generate temporary backend HCL under `RUNNER_TEMP`.
-- Run `terraform init` with S3 backend `use_lockfile = true`.
-- Run `terraform validate`.
+
+- set up pinned Terraform
+- configure Terraform plugin cache
+- configure AWS credentials through OIDC
+- verify the assumed AWS account through `aws sts get-caller-identity`
+- generate temporary backend HCL under `RUNNER_TEMP`
+- run `terraform init` with S3 backend `use_lockfile = true`
+- run `terraform validate`
 
 The composite action does not run `terraform plan`, `apply`, `destroy`, `import`, or repository scripts after credentials are configured.
 
-Stack detection:
-- Static detection script remains available for reporting changed stacks.
-- Same-repository PRs currently use a fixed two-stack matrix and plan both `core` and `application` to avoid GitHub startup-time dynamic matrix failures.
-
 Pull requests:
-- Fork PRs receive no AWS credentials. They run static validation only and get a skip explanation comment.
-- Same-repository PRs run speculative OIDC plans for affected stacks. Metadata marks them `applyable=false` and comments say `SPECULATIVE PLAN - NOT ELIGIBLE FOR APPLY`.
-- Application PR plans may fail before core bootstrap because SSM parameters do not exist; the workflow comments the bootstrap blocker and keeps the job failed.
+
+- fork PRs receive no AWS credentials and only get static validation plus a skip explanation comment
+- same-repository PRs run one speculative plan for the single Terraform root
+- speculative artifacts are marked `applyable=false`
 
 Manual trusted plan:
-- Must run from the repository default branch.
-- Produces `tfplan`, `tfplan.txt`, `tfplan.sha256`, and `metadata.json`.
-- Metadata marks `applyable=true`, `event=workflow_dispatch`, `action=plan`.
-- Publishes plan output to the job summary and artifact.
+
+- must run from the repository default branch
+- produces `tfplan`, `tfplan.txt`, `tfplan.sha256`, and `metadata.json`
+- marks metadata with `applyable=true`, `event=workflow_dispatch`, `action=plan`
 
 Apply:
-- Requires `source_run_id`.
-- Verifies the source workflow run belongs to the same repository, same workflow file, was `workflow_dispatch`, completed successfully, and ran from the default branch.
-- Downloads `tfplan-manual-<source-run-id>-<stack>-<environment>`.
-- Reads metadata, checks out the exact recorded commit, verifies plan and lockfile SHA-256, initializes the same backend, and applies only `terraform apply -input=false -auto-approve tfplan`.
-- Uses concurrency group `terraform-dev-<stack>`.
+
+- requires `source_run_id`
+- validates the source run and exact workflow file
+- checks out the exact recorded commit
+- verifies plan and lockfile SHA-256
+- applies only `terraform apply -input=false -auto-approve tfplan`
 
 Destroy:
-- Requires exact confirmation string `DESTROY <environment> <stack>`.
-- Must run from default branch.
-- For `core`, initializes application state first and fails if application resources still exist.
-- Checks active Bedrock ingestion jobs where Terraform outputs are available.
-- Generates a saved destroy plan, uploads it, then a separate job downloads and applies only that saved destroy plan.
-- Uses the same stack concurrency group.
+
+- requires exact confirmation string `DESTROY dev infra`
+- must run from the default branch
+- checks for active Bedrock ingestion jobs before creating the destroy plan
+- generates a saved destroy plan and applies only that saved plan in a separate job
 
 Metadata schema version is `1` and includes applyability, event/action, repository, workflow file, run ID, stack, environment, commit SHA, branches, Terraform version, state key, plan SHA-256, lockfile SHA-256, creation time, and expiration time.
 
 ## Validation evidence
-Local Terraform validation passed on 2026-07-30:
+Local validation passed on 2026-07-30:
+
 - `terraform fmt -check -recursive`
-- `terraform -chdir=infra/stacks/core init -backend=false`
-- `terraform -chdir=infra/stacks/core validate`
-- `terraform -chdir=infra/stacks/application init -backend=false`
-- `terraform -chdir=infra/stacks/application validate`
+- `terraform -chdir=infra init -backend=false`
+- `terraform -chdir=infra validate`
+- `python -m unittest discover -s scripts/tests`
 
-Security scan found no static AWS credential patterns, no unsafe PR target trigger, and no direct destroy auto-approve command. Exact saved-plan apply commands appear only in protected apply/destroy-apply jobs.
-
-Unavailable on this workstation: Bash, Node.js, actionlint, shellcheck, and a usable Python interpreter beyond the Windows Store alias. Python tests, shell tests, YAML parser validation, actionlint, and shellcheck remain to be run on a developer machine or GitHub-hosted runner.
+The pipeline configuration was also aligned with the repository Python unit tests, IAM audit script, and cost guardrail script. GitHub-hosted execution is still required to validate OIDC claims, artifact promotion, and sticky PR comments end to end.
 
 ## Open issues
-GitHub-hosted execution is required to validate workflow expressions, OIDC claim behavior, artifact download from source runs, and PR sticky comments. AWS account validation is required for role permissions, state bucket access, S3 lockfile access, Bedrock/S3 Vectors planning, and destroy active-ingestion checks.
+GitHub-hosted execution is still required to validate workflow expressions, OIDC claim behavior, artifact download from source runs, and PR comments. AWS account validation is required for role permissions, state bucket access, S3 lockfile access, S3 Vectors planning, and Bedrock ingestion checks.
 
 ## Change log
 - 2026-07-28: Initialized pipeline context with required behavior and risks.
-- 2026-07-30: Implemented unified Terraform workflow, composite bootstrap action, metadata scripts, PR comments, exact apply, destroy safeguards, and local validation documentation.
-- 2026-07-30: Simplified for solo operation by removing GitHub Environment gates and the manual-plan PR comment input/path; workflow now targets `dev` directly.
-- 2026-07-30: Removed unsupported `allowed-account-ids` input from `aws-actions/configure-aws-credentials@v4`; account restriction is now enforced by an explicit STS account check.
-- 2026-07-30: Hardcoded the non-secret AWS deployment role ARN to `aws-chatbot` and added OIDC claim diagnostics before AWS credential configuration.
-- 2026-07-30: Fixed workflow-dispatch startup failure by making stack detection always emit a valid matrix and simplifying top-level concurrency.
-- 2026-07-30: Replaced PR dynamic plan matrix with a fixed two-stack PR matrix to avoid workflow graph startup failures.
-- 2026-07-30: Inlined the `aws-chatbot` role ARN in bootstrap calls to avoid startup-time `env` context validation issues.
+- 2026-07-30: Implemented the single-root Terraform workflow, exact-plan metadata flow, destroy safeguards, and updated path/state conventions after the module refactor.

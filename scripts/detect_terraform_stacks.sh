@@ -22,25 +22,16 @@ fi
 
 changed="$(git diff --name-only "${base_ref}" "${head_ref}" || git diff-tree --no-commit-id --name-only -r "${head_ref}")"
 
-core=false
-application=false
+infra_changed=false
 
 while IFS= read -r file; do
   [[ -z "${file}" ]] && continue
   case "${file}" in
-    infra/stacks/core/*|src/ingestion_lambda/*|documents/*)
-      core=true
-      ;;
-    infra/stacks/application/*|src/query_lambda/*|frontend/*)
-      application=true
-      ;;
-    infra/modules/*|infra/environments/*|.terraform-version|.github/actions/terraform-bootstrap/*|.github/workflows/terraform.yml)
-      core=true
-      application=true
+    infra/*|src/*|frontend/*|documents/*|.terraform-version|.github/actions/terraform-bootstrap/*|.github/workflows/terraform.yml)
+      infra_changed=true
       ;;
     *.tf|*.tfvars|*.hcl)
-      core=true
-      application=true
+      infra_changed=true
       ;;
     README.md|ai_context/*|*.md)
       ;;
@@ -50,11 +41,8 @@ while IFS= read -r file; do
 done <<< "${changed}"
 
 items=()
-if [[ "${core}" == "true" ]]; then
-  items+=('{"stack":"core","working_directory":"infra/stacks/core","tfvars":"infra/environments/dev/core.tfvars","state_suffix":"core/terraform.tfstate"}')
-fi
-if [[ "${application}" == "true" ]]; then
-  items+=('{"stack":"application","working_directory":"infra/stacks/application","tfvars":"infra/environments/dev/application.tfvars","state_suffix":"application/terraform.tfstate"}')
+if [[ "${infra_changed}" == "true" ]]; then
+  items+=('{"stack":"infra","working_directory":"infra","tfvars":"infra/terraform.tfvars","state_suffix":"terraform.tfstate"}')
 fi
 
 if [[ "${#items[@]}" -eq 0 ]]; then

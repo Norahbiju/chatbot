@@ -14,3 +14,5 @@ build/
 __pycache__/
 .pytest_cache/
 .coverage
+.venv/
+.venv-test/
