@@ -43,6 +43,7 @@ jobs:
           query_lambda="$(terraform output -raw query_lambda_name)"
           ingestion_group="/aws/lambda/bedrock-rag-dev-ingestion"
           query_group="/aws/lambda/${query_lambda}"
+          lambda_model_id="$(aws lambda get-function-configuration --function-name "${query_lambda}" --query 'Environment.Variables.MODEL_ID' --output text)"
 
           echo "## Live RAG diagnostics" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
@@ -54,6 +55,7 @@ jobs:
 
           model_id="$(aws ssm get-parameter --name /bedrock-rag/dev/bedrock/model-id --query 'Parameter.Value' --output text)"
           echo "- Model ID: \`${model_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Query Lambda MODEL_ID: \`${lambda_model_id}\`" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
 
           echo "### S3 documents" >> "${GITHUB_STEP_SUMMARY}"
@@ -129,7 +131,7 @@ jobs:
           }
           JSON
           if aws bedrock-runtime invoke-model \
-            --model-id "${model_id}" \
+            --model-id "${lambda_model_id}" \
             --body fileb://invoke-payload.json \
             --content-type application/json \
             --accept application/json \
