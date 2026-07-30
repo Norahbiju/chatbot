@@ -113,6 +113,16 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
           echo "### Direct invoke probe" >> "${GITHUB_STEP_SUMMARY}"
+          echo "### Inference profile details" >> "${GITHUB_STEP_SUMMARY}"
+          aws bedrock get-inference-profile \
+            --inference-profile-identifier "${lambda_model_id}" \
+            --output json > inference-profile.json
+          {
+            echo '```json'
+            cat inference-profile.json
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
           cat > invoke-payload.json <<'JSON'
           {
             "schemaVersion": "messages-v1",
@@ -161,6 +171,7 @@ jobs:
             infra/ingestion-logs.txt
             infra/query-logs.txt
             infra/retrieve-probe.json
+            infra/inference-profile.json
             infra/invoke-response.json
             infra/invoke-error.txt
           if-no-files-found: error
