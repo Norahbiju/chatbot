@@ -11,7 +11,7 @@ SCRIPT = ROOT / "scripts/check_destroy_order.sh"
 class DestroyOrderTests(unittest.TestCase):
     def test_destroy_confirmation_valid(self):
         result = subprocess.run(
-            ["bash", str(SCRIPT), "infra", "dev", "DESTROY dev infra"],
+            ["bash", str(SCRIPT), "DESTROY"],
             env={**os.environ, "CHECK_STATE": "false"},
             text=True,
             capture_output=True,
@@ -20,7 +20,7 @@ class DestroyOrderTests(unittest.TestCase):
 
     def test_destroy_confirmation_invalid(self):
         result = subprocess.run(
-            ["bash", str(SCRIPT), "infra", "dev", "destroy dev infra"],
+            ["bash", str(SCRIPT), "destroy"],
             env={**os.environ, "CHECK_STATE": "false"},
             text=True,
             capture_output=True,

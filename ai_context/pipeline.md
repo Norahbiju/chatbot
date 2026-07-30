@@ -33,26 +33,24 @@ Repository variables:
 - `AWS_REGION`
 - `AWS_ACCOUNT_ID`
 - `AWS_ROLE_ARN`
-- `TF_STACK`
-- `TF_ENVIRONMENT`
 - `TF_WORKING_DIRECTORY`
 - `TF_STATE_BUCKET`
 - `TF_STATE_REGION`
-- `TF_STATE_PREFIX`
+- `TF_STATE_KEY`
 - `TF_ALERT_EMAIL`
 - `TF_MONTHLY_BUDGET_LIMIT_USD`
 
-The workflows now read stack name, environment name, working directory, and deployment role ARN from repository variables instead of workflow-level `env` blocks.
+The workflows now read the fixed working directory, backend state key, and deployment role ARN from repository variables instead of workflow-level `env` blocks.
 
 State key:
 
-- `<TF_STATE_PREFIX>/dev/terraform.tfstate`
+- `<TF_STATE_KEY>`
 
 Artifact names:
 
-- PR speculative: `tfplan-pr-<run-id>-infra-dev`
-- Manual applyable plan: `tfplan-manual-<run-id>-infra-dev`
-- Destroy plan: `tfdestroy-manual-<run-id>-infra-dev`
+- PR speculative: `tfplan-pr-<run-id>`
+- Manual applyable plan: `tfplan-manual-<run-id>`
+- Destroy plan: `tfdestroy-manual-<run-id>`
 
 Artifacts retain for 3 days.
 
@@ -103,12 +101,12 @@ Apply:
 
 Destroy:
 
-- requires exact confirmation string `DESTROY dev infra`
+- requires exact confirmation string `DESTROY`
 - must run from the default branch
 - checks for active Bedrock ingestion jobs before creating the destroy plan
 - generates a saved destroy plan and applies only that saved plan in a separate job
 
-Metadata schema version is `1` and includes applyability, event/action, repository, workflow file, run ID, stack, environment, commit SHA, branches, Terraform version, state key, plan SHA-256, lockfile SHA-256, creation time, and expiration time.
+Metadata schema version is `1` and includes applyability, event/action, repository, workflow file, run ID, commit SHA, branches, Terraform version, state key, plan SHA-256, lockfile SHA-256, creation time, and expiration time.
 
 ## Validation evidence
 Local validation passed on 2026-07-30:
@@ -136,4 +134,5 @@ The split workflow files and Terraform 1.15.1 pin need a fresh GitHub-hosted PR-
 - 2026-07-30: Fixed PR comment permissions with `PR_COMMENT_TOKEN`, fixed CloudFront disabled-cache policy settings, and updated the manual plan/apply artifact flow to carry Lambda ZIP bundles into exact-plan apply.
 - 2026-07-30: Split the workflow into dedicated PR-plan and dispatch files, removed the fork PR note path, simplified duplicated workflow steps, and updated the Terraform pin to 1.15.1.
 - 2026-07-30: Replaced repeated workflow shell blocks with focused composite actions for repository validation, plan packaging, and saved-plan restoration.
-- 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for stack, environment, working directory, and deployment role settings.
+- 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for the fixed working directory, backend state settings, and deployment role settings.
+- 2026-07-30: Simplified the single-root pipeline further by removing stack/environment workflow inputs, moving to one fixed `TF_STATE_KEY`, shortening artifact names, and reducing destroy confirmation noise.

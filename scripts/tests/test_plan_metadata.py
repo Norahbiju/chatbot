@@ -35,8 +35,6 @@ class MetadataTests(unittest.TestCase):
             "--repository": "owner/repo",
             "--workflow-file": ".github/workflows/terraform-dispatch.yml",
             "--workflow-run-id": "123",
-            "--stack": "infra",
-            "--environment": "dev",
             "--commit-sha": "abc",
             "--head-branch": "main",
             "--default-branch": "main",
@@ -57,8 +55,6 @@ class MetadataTests(unittest.TestCase):
             "--repository": "owner/repo",
             "--workflow-file": ".github/workflows/terraform-dispatch.yml",
             "--workflow-run-id": "123",
-            "--stack": "infra",
-            "--environment": "dev",
             "--state-key": "bedrock-rag/dev/terraform.tfstate",
             "--default-branch": "main",
         }
@@ -71,14 +67,6 @@ class MetadataTests(unittest.TestCase):
     def test_valid_infra_metadata(self):
         self.create()
         self.assertEqual(self.verify().returncode, 0)
-
-    def test_wrong_stack(self):
-        self.create()
-        self.assertNotEqual(self.verify(**{"--stack": "other"}).returncode, 0)
-
-    def test_wrong_environment(self):
-        self.create()
-        self.assertNotEqual(self.verify(**{"--environment": "prod"}).returncode, 0)
 
     def test_wrong_run_id(self):
         self.create()

@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-stack="${1:?stack is required}"
-environment="${2:?environment is required}"
-confirmation="${3:?destroy confirmation is required}"
+confirmation="${1:?destroy confirmation is required}"
 
-expected="DESTROY ${environment} ${stack}"
+expected="DESTROY"
 if [[ "${confirmation}" != "${expected}" ]]; then
   echo "Destroy confirmation must exactly equal: ${expected}" >&2
   exit 1
 fi
 
-echo "Destroy confirmation accepted for ${stack}."
+echo "Destroy confirmation accepted."

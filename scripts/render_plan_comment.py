@@ -36,8 +36,8 @@ def main() -> None:
     if args.bootstrap_blocked:
         blocker = "\n\nThe application plan is blocked because the core stack has not yet created the required SSM parameters. Apply the core stack first, then rerun the plan.\n"
     note = "\n\nPlan output was truncated. Download the artifact for the complete output." if truncated else ""
-    body = f"""<!-- terraform-plan:{metadata['stack']}:{metadata['environment']} -->
-## Terraform Plan: `{metadata['stack']}` / `{metadata['environment']}`
+    body = f"""<!-- terraform-plan -->
+## Terraform Plan
 
 **{banner}**
 

@@ -17,12 +17,6 @@ inputs:
   repository:
     required: true
     description: GitHub repository full name.
-  stack:
-    required: true
-    description: Logical stack name.
-  environment:
-    required: true
-    description: Deployment environment.
   state-key:
     required: true
     description: Terraform backend state key.
@@ -65,8 +59,6 @@ runs:
           --repository "${{ inputs.repository }}" \
           --workflow-file "${{ inputs.workflow-file }}" \
           --workflow-run-id "${{ inputs.workflow-run-id }}" \
-          --stack "${{ inputs.stack }}" \
-          --environment "${{ inputs.environment }}" \
           --state-key "${{ inputs.state-key }}" \
           --default-branch "${{ inputs.default-branch }}" \
           --allow-lockfile-mismatch

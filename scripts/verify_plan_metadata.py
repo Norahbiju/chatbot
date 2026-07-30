@@ -13,8 +13,6 @@ REQUIRED = {
     "repository",
     "workflowFile",
     "workflowRunId",
-    "stack",
-    "environment",
     "commitSha",
     "defaultBranch",
     "terraformVersion",
@@ -50,8 +48,6 @@ def main() -> None:
     parser.add_argument("--repository", required=True)
     parser.add_argument("--workflow-file", required=True)
     parser.add_argument("--workflow-run-id", required=True)
-    parser.add_argument("--stack", required=True)
-    parser.add_argument("--environment", required=True)
     parser.add_argument("--state-key", required=True)
     parser.add_argument("--default-branch", required=True)
     parser.add_argument("--allow-lockfile-mismatch", action="store_true")
@@ -67,8 +63,6 @@ def main() -> None:
         "repository": args.repository,
         "workflowFile": args.workflow_file,
         "workflowRunId": args.workflow_run_id,
-        "stack": args.stack,
-        "environment": args.environment,
         "stateKey": args.state_key,
         "defaultBranch": args.default_branch,
     }
@@ -92,7 +86,7 @@ def main() -> None:
             print("warning: lockfile checksum mismatch; continuing because the saved plan checksum matched")
         else:
             fail("lockfile checksum mismatch")
-    print(json.dumps({"status": "ok", "stack": metadata["stack"], "environment": metadata["environment"]}))
+    print(json.dumps({"status": "ok", "stateKey": metadata["stateKey"]}))
 
 
 if __name__ == "__main__":

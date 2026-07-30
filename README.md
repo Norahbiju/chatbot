@@ -115,11 +115,9 @@ Suggested values:
 ```text
 AWS_REGION=ap-south-1
 AWS_ROLE_ARN=arn:aws:iam::<account-id>:role/aws-chatbot
-TF_STACK=infra
-TF_ENVIRONMENT=dev
 TF_WORKING_DIRECTORY=infra
 TF_STATE_REGION=ap-south-1
-TF_STATE_PREFIX=bedrock-rag
+TF_STATE_KEY=bedrock-rag/dev/terraform.tfstate
 TF_MONTHLY_BUDGET_LIMIT_USD=5
 ```
 
@@ -138,7 +136,7 @@ Actions -> Terraform Dispatch -> Run workflow -> action=apply, source_run_id=<ma
 Manual destroy requires an exact confirmation string:
 
 ```text
-DESTROY dev infra
+DESTROY
 ```
 
 ## Commands

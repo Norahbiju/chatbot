@@ -14,12 +14,6 @@ inputs:
   workflow-file:
     required: true
     description: Workflow file path used for metadata verification.
-  stack:
-    required: true
-    description: Logical stack name.
-  environment:
-    required: true
-    description: Deployment environment.
   terraform-version:
     required: true
     description: Terraform version used for the run.
@@ -148,8 +142,6 @@ runs:
           --repository "${{ inputs.repository }}" \
           --workflow-file "${{ inputs.workflow-file }}" \
           --workflow-run-id "${{ inputs.workflow-run-id }}" \
-          --stack "${{ inputs.stack }}" \
-          --environment "${{ inputs.environment }}" \
           --commit-sha "${{ inputs.commit-sha }}" \
           --head-branch "${{ inputs.head-branch }}" \
           --default-branch "${{ inputs.default-branch }}" \
@@ -184,8 +176,6 @@ runs:
         {
           echo "## ${title}"
           echo
-          echo "- Stack: \`${{ inputs.stack }}\`"
-          echo "- Environment: \`${{ inputs.environment }}\`"
           echo "- Artifact: \`${{ inputs.artifact-name }}\`"
           if [[ "${{ inputs.mode }}" == "manual" ]]; then
             echo "- Source run ID for apply: \`${{ inputs.workflow-run-id }}\`"

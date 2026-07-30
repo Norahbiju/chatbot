@@ -83,7 +83,7 @@ jobs:
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
 
       - name: Terraform plan package
         id: plan
@@ -94,22 +94,20 @@ jobs:
         with:
           working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
           mode: manual
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
           workflow-file: .github/workflows/terraform-dispatch.yml
-          stack: ${{ vars.TF_STACK }}
-          environment: ${{ vars.TF_ENVIRONMENT }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           repository: ${{ github.repository }}
           workflow-run-id: ${{ github.run_id }}
           commit-sha: ${{ github.sha }}
           head-branch: ${{ github.ref_name }}
           default-branch: ${{ github.event.repository.default_branch }}
-          artifact-name: tfplan-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          artifact-name: tfplan-manual-${{ github.run_id }}
 
       - name: Upload applyable plan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          name: tfplan-manual-${{ github.run_id }}
           path: |
             ${{ vars.TF_WORKING_DIRECTORY }}/tfplan
             ${{ vars.TF_WORKING_DIRECTORY }}/tfplan.txt
@@ -130,7 +128,7 @@ jobs:
       contents: read
       actions: read
     concurrency:
-      group: terraform-${{ vars.TF_ENVIRONMENT }}-${{ vars.TF_STACK }}
+      group: terraform-main
       cancel-in-progress: false
     steps:
       - name: Require source run ID and default branch
@@ -164,7 +162,7 @@ jobs:
       - name: Download source plan artifact
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-manual-${{ inputs.source_run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          name: tfplan-manual-${{ inputs.source_run_id }}
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: downloaded-plan
@@ -178,9 +176,7 @@ jobs:
           workflow-file: .github/workflows/terraform-dispatch.yml
           workflow-run-id: ${{ inputs.source_run_id }}
           repository: ${{ github.repository }}
-          stack: ${{ vars.TF_STACK }}
-          environment: ${{ vars.TF_ENVIRONMENT }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
           default-branch: ${{ github.event.repository.default_branch }}
           plan-file-name: tfplan
           restore-lambda-zips: "true"
@@ -195,7 +191,7 @@ jobs:
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
 
       - name: Terraform apply saved plan
         shell: bash
@@ -206,8 +202,6 @@ jobs:
           {
             echo "## Terraform apply"
             echo
-            echo "- Stack: \`${{ vars.TF_STACK }}\`"
-            echo "- Environment: \`${{ vars.TF_ENVIRONMENT }}\`"
             echo "- Source plan run ID: \`${{ inputs.source_run_id }}\`"
             echo "- Commit: \`${{ steps.restore.outputs.commit-sha }}\`"
             echo "- Plan SHA-256: \`$(python -c 'import json; print(json.load(open("../downloaded-plan/metadata.json"))["planSha256"])')\`"
@@ -238,7 +232,7 @@ jobs:
             echo "Destroy must run from the repository default branch." >&2
             exit 1
           fi
-          bash scripts/check_destroy_order.sh "${{ vars.TF_STACK }}" "${{ vars.TF_ENVIRONMENT }}" "${{ inputs.destroy_confirmation }}"
+          bash scripts/check_destroy_order.sh "${{ inputs.destroy_confirmation }}"
 
       - name: Read Terraform version
         id: tfversion
@@ -255,7 +249,7 @@ jobs:
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
 
       - name: Check active ingestion before destroy
         shell: bash
@@ -280,22 +274,20 @@ jobs:
         with:
           working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
           mode: destroy
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
           workflow-file: .github/workflows/terraform-dispatch.yml
-          stack: ${{ vars.TF_STACK }}
-          environment: ${{ vars.TF_ENVIRONMENT }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           repository: ${{ github.repository }}
           workflow-run-id: ${{ github.run_id }}
           commit-sha: ${{ github.sha }}
           head-branch: ${{ github.ref_name }}
           default-branch: ${{ github.event.repository.default_branch }}
-          artifact-name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          artifact-name: tfdestroy-manual-${{ github.run_id }}
 
       - name: Upload destroy plan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          name: tfdestroy-manual-${{ github.run_id }}
           path: |
             ${{ vars.TF_WORKING_DIRECTORY }}/destroy.tfplan
             ${{ vars.TF_WORKING_DIRECTORY }}/destroy.tfplan.txt
@@ -314,7 +306,7 @@ jobs:
       contents: read
       actions: read
     concurrency:
-      group: terraform-${{ vars.TF_ENVIRONMENT }}-${{ vars.TF_STACK }}
+      group: terraform-main
       cancel-in-progress: false
     steps:
       - name: Checkout
@@ -325,7 +317,7 @@ jobs:
       - name: Download destroy plan artifact
         uses: actions/download-artifact@v4
         with:
-          name: tfdestroy-manual-${{ github.run_id }}-${{ vars.TF_STACK }}-${{ vars.TF_ENVIRONMENT }}
+          name: tfdestroy-manual-${{ github.run_id }}
           path: downloaded-destroy
 
       - name: Restore destroy plan
@@ -337,9 +329,7 @@ jobs:
           workflow-file: .github/workflows/terraform-dispatch.yml
           workflow-run-id: ${{ github.run_id }}
           repository: ${{ github.repository }}
-          stack: ${{ vars.TF_STACK }}
-          environment: ${{ vars.TF_ENVIRONMENT }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
           default-branch: ${{ github.event.repository.default_branch }}
           plan-file-name: destroy.tfplan
 
@@ -353,7 +343,7 @@ jobs:
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
-          state-key: ${{ vars.TF_STATE_PREFIX }}/${{ vars.TF_ENVIRONMENT }}/terraform.tfstate
+          state-key: ${{ vars.TF_STATE_KEY }}
 
       - name: Apply destroy plan
         shell: bash
@@ -364,8 +354,6 @@ jobs:
           {
             echo "## Terraform destroy apply"
             echo
-            echo "- Stack: \`${{ vars.TF_STACK }}\`"
-            echo "- Environment: \`${{ vars.TF_ENVIRONMENT }}\`"
             echo "- Destroy plan run ID: \`${GITHUB_RUN_ID}\`"
             echo
             echo '```terraform'

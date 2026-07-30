@@ -5,10 +5,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VALID_STACKS = {"infra"}
-VALID_ENVIRONMENTS = {"dev"}
-
-
 def sha256_file(path: str) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -34,8 +30,6 @@ def main() -> None:
     parser.add_argument("--repository", required=True)
     parser.add_argument("--workflow-file", required=True)
     parser.add_argument("--workflow-run-id", required=True)
-    parser.add_argument("--stack", required=True)
-    parser.add_argument("--environment", required=True)
     parser.add_argument("--commit-sha", required=True)
     parser.add_argument("--head-branch", required=True)
     parser.add_argument("--default-branch", default="")
@@ -44,11 +38,6 @@ def main() -> None:
     parser.add_argument("--retention-days", type=int, default=3)
     args = parser.parse_args()
 
-    if args.stack not in VALID_STACKS:
-        raise SystemExit("invalid stack")
-    if args.environment not in VALID_ENVIRONMENTS:
-        raise SystemExit("invalid environment")
-
     now = datetime.now(timezone.utc).replace(microsecond=0)
     metadata = {
         "action": args.action,
@@ -56,7 +45,6 @@ def main() -> None:
         "commitSha": require(args.commit_sha, "commit-sha"),
         "createdAt": now.isoformat().replace("+00:00", "Z"),
         "defaultBranch": args.default_branch,
-        "environment": args.environment,
         "event": require(args.event, "event"),
         "expiresAt": (now + timedelta(days=args.retention_days)).isoformat().replace("+00:00", "Z"),
         "headBranch": require(args.head_branch, "head-branch"),
@@ -64,7 +52,6 @@ def main() -> None:
         "planSha256": sha256_file(args.plan_file),
         "repository": require(args.repository, "repository"),
         "schemaVersion": 1,
-        "stack": args.stack,
         "stateKey": require(args.state_key, "state-key"),
         "terraformVersion": require(args.terraform_version, "terraform-version"),
         "workflowFile": require(args.workflow_file, "workflow-file"),
