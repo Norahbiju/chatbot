@@ -42,7 +42,6 @@ concurrency:
 
 env:
   WORKFLOW_FILE: .github/workflows/terraform.yml
-  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::484632959006:role/aws-chatbot
 
 jobs:
   static-validation:
@@ -170,18 +169,26 @@ jobs:
 
   pr-plan:
     name: Speculative PR plan (${{ matrix.stack }})
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.detect-pr-stacks.outputs.matrix != '{"include":[]}'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     needs:
       - static-validation
-      - detect-pr-stacks
     permissions:
       id-token: write
       contents: read
       actions: read
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.detect-pr-stacks.outputs.matrix) }}
+      matrix:
+        include:
+          - stack: core
+            working_directory: infra/stacks/core
+            tfvars: infra/environments/dev/core.tfvars
+            state_suffix: core/terraform.tfstate
+          - stack: application
+            working_directory: infra/stacks/application
+            tfvars: infra/environments/dev/application.tfvars
+            state_suffix: application/terraform.tfstate
     env:
       STACK: ${{ matrix.stack }}
       ENVIRONMENT: dev
@@ -189,7 +196,6 @@ jobs:
       TFVARS: ${{ matrix.tfvars }}
       STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/${{ matrix.state_suffix }}
       ARTIFACT_NAME: tfplan-pr-${{ github.run_id }}-${{ matrix.stack }}-dev
-      ROLE_TO_ASSUME: ${{ env.AWS_DEPLOY_ROLE_ARN }}
       TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
       TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
     steps:
@@ -209,7 +215,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "Using deployment role ${ROLE_TO_ASSUME} for PR plans."
+          echo "Using deployment role arn:aws:iam::484632959006:role/aws-chatbot for PR plans."
 
       - name: Bootstrap Terraform
         uses: ./.github/actions/terraform-bootstrap
@@ -217,7 +223,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -381,7 +387,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -547,7 +553,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.metadata.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -616,7 +622,7 @@ jobs:
           working-directory: infra/stacks/application
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -635,7 +641,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
@@ -773,7 +779,7 @@ jobs:
           working-directory: ${{ env.WORKING_DIRECTORY }}
           terraform-version: ${{ steps.metadata.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/aws-chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}

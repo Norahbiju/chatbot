@@ -24,7 +24,7 @@ Workflow triggers:
 
 Repository variables:
 - Required: `AWS_REGION`, `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_STATE_PREFIX`, `TF_ALERT_EMAIL`, `TF_MONTHLY_BUDGET_LIMIT_USD`.
-- The current solo workflow pins the deployment role ARN in `.github/workflows/terraform.yml` as `arn:aws:iam::484632959006:role/aws-chatbot` to avoid GitHub variable mismatch while debugging OIDC.
+- The current solo workflow pins the deployment role ARN directly in `.github/workflows/terraform.yml` as `arn:aws:iam::484632959006:role/aws-chatbot` to avoid GitHub variable/context mismatch while debugging OIDC.
 
 GitHub Environments:
 - Not used in the current solo-operator workflow.
@@ -56,10 +56,8 @@ Composite action responsibilities:
 The composite action does not run `terraform plan`, `apply`, `destroy`, `import`, or repository scripts after credentials are configured.
 
 Stack detection:
-- Core: `infra/stacks/core`, `src/ingestion_lambda`, `documents`.
-- Application: `infra/stacks/application`, `src/query_lambda`, `frontend`.
-- Both: shared modules, environments, provider/version/workflow/action changes, unknown Terraform-related changes.
-- Documentation-only changes do not trigger AWS-backed plans unless deployment behavior files changed.
+- Static detection script remains available for reporting changed stacks.
+- Same-repository PRs currently use a fixed two-stack matrix and plan both `core` and `application` to avoid GitHub startup-time dynamic matrix failures.
 
 Pull requests:
 - Fork PRs receive no AWS credentials. They run static validation only and get a skip explanation comment.
@@ -111,3 +109,5 @@ GitHub-hosted execution is required to validate workflow expressions, OIDC claim
 - 2026-07-30: Removed unsupported `allowed-account-ids` input from `aws-actions/configure-aws-credentials@v4`; account restriction is now enforced by an explicit STS account check.
 - 2026-07-30: Hardcoded the non-secret AWS deployment role ARN to `aws-chatbot` and added OIDC claim diagnostics before AWS credential configuration.
 - 2026-07-30: Fixed workflow-dispatch startup failure by making stack detection always emit a valid matrix and simplifying top-level concurrency.
+- 2026-07-30: Replaced PR dynamic plan matrix with a fixed two-stack PR matrix to avoid workflow graph startup failures.
+- 2026-07-30: Inlined the `aws-chatbot` role ARN in bootstrap calls to avoid startup-time `env` context validation issues.
