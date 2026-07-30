@@ -110,3 +110,4 @@ GitHub-hosted execution is required to validate workflow expressions, OIDC claim
 - 2026-07-30: Simplified for solo operation by removing GitHub Environment gates and the manual-plan PR comment input/path; workflow now targets `dev` directly.
 - 2026-07-30: Removed unsupported `allowed-account-ids` input from `aws-actions/configure-aws-credentials@v4`; account restriction is now enforced by an explicit STS account check.
 - 2026-07-30: Hardcoded the non-secret AWS deployment role ARN to `aws-chatbot` and added OIDC claim diagnostics before AWS credential configuration.
+- 2026-07-30: Fixed workflow-dispatch startup failure by making stack detection always emit a valid matrix and simplifying top-level concurrency.
