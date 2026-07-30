@@ -44,6 +44,7 @@ jobs:
           ingestion_group="/aws/lambda/bedrock-rag-dev-ingestion"
           query_group="/aws/lambda/${query_lambda}"
           lambda_model_id="$(aws lambda get-function-configuration --function-name "${query_lambda}" --query 'Environment.Variables.MODEL_ID' --output text)"
+          lambda_kb_id="$(aws lambda get-function-configuration --function-name "${query_lambda}" --query 'Environment.Variables.KNOWLEDGE_BASE_ID' --output text)"
 
           echo "## Live RAG diagnostics" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
@@ -56,6 +57,7 @@ jobs:
           model_id="$(aws ssm get-parameter --name /bedrock-rag/dev/bedrock/model-id --query 'Parameter.Value' --output text)"
           echo "- Model ID: \`${model_id}\`" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Query Lambda MODEL_ID: \`${lambda_model_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Query Lambda KNOWLEDGE_BASE_ID: \`${lambda_kb_id}\`" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
 
           echo "### S3 documents" >> "${GITHUB_STEP_SUMMARY}"
@@ -100,7 +102,7 @@ jobs:
 
           echo "### Direct retrieve probe" >> "${GITHUB_STEP_SUMMARY}"
           aws bedrock-agent-runtime retrieve \
-            --knowledge-base-id "${kb_id}" \
+            --knowledge-base-id "${lambda_kb_id}" \
             --retrieval-query '{"text":"how does kubernetes work"}' \
             --retrieval-configuration '{"vectorSearchConfiguration":{"numberOfResults":4}}' \
             --output json > retrieve-probe.json
