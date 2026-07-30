@@ -46,7 +46,7 @@ Composite action responsibilities:
 - Set up pinned Terraform.
 - Configure Terraform plugin cache.
 - Configure AWS credentials through `aws-actions/configure-aws-credentials` and OIDC.
-- Restrict expected AWS account.
+- Verify the assumed AWS account through an explicit `aws sts get-caller-identity` check.
 - Run `aws sts get-caller-identity`.
 - Generate temporary backend HCL under `RUNNER_TEMP`.
 - Run `terraform init` with S3 backend `use_lockfile = true`.
@@ -107,3 +107,4 @@ GitHub-hosted execution is required to validate workflow expressions, OIDC claim
 - 2026-07-28: Initialized pipeline context with required behavior and risks.
 - 2026-07-30: Implemented unified Terraform workflow, composite bootstrap action, metadata scripts, PR comments, exact apply, destroy safeguards, and local validation documentation.
 - 2026-07-30: Simplified for solo operation by removing GitHub Environment gates and the manual-plan PR comment input/path; workflow now targets `dev` directly.
+- 2026-07-30: Removed unsupported `allowed-account-ids` input from `aws-actions/configure-aws-credentials@v4`; account restriction is now enforced by an explicit STS account check.

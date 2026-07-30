@@ -61,13 +61,17 @@ runs:
         aws-region: ${{ inputs.aws-region }}
         role-to-assume: ${{ inputs.role-to-assume }}
         role-session-name: github-actions-terraform
-        allowed-account-ids: ${{ inputs.aws-account-id }}
 
     - name: Verify AWS identity
       shell: bash
       run: |
         set -Eeuo pipefail
-        aws sts get-caller-identity --query 'Account' --output text
+        account="$(aws sts get-caller-identity --query 'Account' --output text)"
+        if [[ "${account}" != "${{ inputs.aws-account-id }}" ]]; then
+          echo "Expected AWS account ${{ inputs.aws-account-id }} but assumed ${account}." >&2
+          exit 1
+        fi
+        echo "Assumed expected AWS account ${account}."
 
     - name: Generate backend config
       id: backend
