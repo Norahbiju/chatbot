@@ -7,7 +7,7 @@ inputs:
     description: Terraform root directory.
   mode:
     required: true
-    description: Plan mode: speculative, manual, or destroy.
+    description: "Plan mode: speculative, manual, or destroy."
   state-key:
     required: true
     description: Terraform backend state key.
