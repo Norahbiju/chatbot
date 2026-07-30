@@ -415,6 +415,7 @@ jobs:
             ${{ env.WORKING_DIRECTORY }}/metadata.json
             ${{ env.WORKING_DIRECTORY }}/modules/core/.terraform/*.zip
             ${{ env.WORKING_DIRECTORY }}/modules/application/.terraform/*.zip
+          include-hidden-files: true
           retention-days: 3
           if-no-files-found: error
 
