@@ -1,0 +1,104 @@
+name: Diagnose RAG
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose ingestion and retrieval state
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read Terraform version
+        id: tfversion
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < .terraform-version)" >> "${GITHUB_OUTPUT}"
+
+      - name: Bootstrap Terraform
+        uses: ./.github/actions/terraform-bootstrap
+        with:
+          working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+          terraform-version: ${{ steps.tfversion.outputs.version }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          state-region: ${{ vars.TF_STATE_REGION }}
+          state-key: ${{ vars.TF_STATE_KEY }}
+
+      - name: Inspect live RAG state
+        shell: bash
+        working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
+        run: |
+          set -Eeuo pipefail
+          kb_id="$(terraform output -raw knowledge_base_id)"
+          ds_id="$(terraform output -raw data_source_id)"
+          bucket="$(terraform output -raw source_document_bucket_name)"
+          query_lambda="$(terraform output -raw query_lambda_name)"
+          ingestion_group="/aws/lambda/bedrock-rag-dev-ingestion"
+          query_group="/aws/lambda/${query_lambda}"
+
+          echo "## Live RAG diagnostics" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Knowledge Base ID: \`${kb_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Data Source ID: \`${ds_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Source bucket: \`${bucket}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Query Lambda: \`${query_lambda}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "### S3 documents" >> "${GITHUB_STEP_SUMMARY}"
+          aws s3api list-objects-v2 \
+            --bucket "${bucket}" \
+            --prefix documents/ \
+            --query 'Contents[].{Key:Key,LastModified:LastModified,Size:Size}' \
+            --output table | tee s3-docs.txt
+          {
+            echo '```text'
+            cat s3-docs.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "### Ingestion jobs" >> "${GITHUB_STEP_SUMMARY}"
+          aws bedrock-agent list-ingestion-jobs \
+            --knowledge-base-id "${kb_id}" \
+            --data-source-id "${ds_id}" \
+            --query 'ingestionJobSummaries[].{Id:ingestionJobId,Status:status,Started:startedAt,Updated:updatedAt,Statistics:statistics}' \
+            --output table | tee ingestion-jobs.txt
+          {
+            echo '```text'
+            cat ingestion-jobs.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "### Recent ingestion Lambda logs" >> "${GITHUB_STEP_SUMMARY}"
+          aws logs tail "${ingestion_group}" --since 2d --format short | tail -n 100 | tee ingestion-logs.txt || true
+          {
+            echo '```text'
+            cat ingestion-logs.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "### Recent query Lambda logs" >> "${GITHUB_STEP_SUMMARY}"
+          aws logs tail "${query_group}" --since 2d --format short | tail -n 100 | tee query-logs.txt || true
+          {
+            echo '```text'
+            cat query-logs.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-diagnostics-${{ github.run_id }}
+          path: |
+            infra/s3-docs.txt
+            infra/ingestion-jobs.txt
+            infra/ingestion-logs.txt
+            infra/query-logs.txt
+          if-no-files-found: error
