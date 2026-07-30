@@ -26,8 +26,8 @@ resource "aws_bedrockagent_knowledge_base" "this" {
 }
 
 resource "aws_bedrockagent_data_source" "documents" {
-  knowledge_base_id = aws_bedrockagent_knowledge_base.this.id
-  name              = "${local.name_prefix}-documents"
+  knowledge_base_id    = aws_bedrockagent_knowledge_base.this.id
+  name                 = "${local.name_prefix}-documents"
   data_deletion_policy = "RETAIN"
 
   data_source_configuration {
