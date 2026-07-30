@@ -52,6 +52,10 @@ jobs:
           echo "- Query Lambda: \`${query_lambda}\`" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
 
+          model_id="$(aws ssm get-parameter --name /bedrock-rag/dev/bedrock/model-id --query 'Parameter.Value' --output text)"
+          echo "- Model ID: \`${model_id}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+
           echo "### S3 documents" >> "${GITHUB_STEP_SUMMARY}"
           aws s3api list-objects-v2 \
             --bucket "${bucket}" \
@@ -92,6 +96,57 @@ jobs:
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
 
+          echo "### Direct retrieve probe" >> "${GITHUB_STEP_SUMMARY}"
+          aws bedrock-agent-runtime retrieve \
+            --knowledge-base-id "${kb_id}" \
+            --retrieval-query '{"text":"how does kubernetes work"}' \
+            --retrieval-configuration '{"vectorSearchConfiguration":{"numberOfResults":4}}' \
+            --output json > retrieve-probe.json
+          {
+            echo '```json'
+            cat retrieve-probe.json
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "### Direct invoke probe" >> "${GITHUB_STEP_SUMMARY}"
+          cat > invoke-payload.json <<'JSON'
+          {
+            "schemaVersion": "messages-v1",
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "text": "Say hello in one sentence."
+                  }
+                ]
+              }
+            ],
+            "inferenceConfig": {
+              "maxTokens": 64,
+              "temperature": 0.2
+            }
+          }
+          JSON
+          if aws bedrock-runtime invoke-model \
+            --model-id "${model_id}" \
+            --body fileb://invoke-payload.json \
+            --content-type application/json \
+            --accept application/json \
+            invoke-response.json > invoke-metadata.txt 2> invoke-error.txt; then
+            {
+              echo '```json'
+              cat invoke-response.json
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo '```text'
+              cat invoke-error.txt
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
       - name: Upload diagnostics
         uses: actions/upload-artifact@v4
         with:
@@ -101,4 +156,7 @@ jobs:
             infra/ingestion-jobs.txt
             infra/ingestion-logs.txt
             infra/query-logs.txt
+            infra/retrieve-probe.json
+            infra/invoke-response.json
+            infra/invoke-error.txt
           if-no-files-found: error
