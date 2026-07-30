@@ -4,7 +4,7 @@
 Document the GitHub Actions Terraform CI/CD pipeline for safe validation, planning, exact saved-plan promotion, apply, and destroy of the single Terraform root.
 
 ## Current state
-Pipeline status: `IMPLEMENTED, SPLIT BY TRIGGER TYPE, AND REQUIRING POST-REFACTOR GITHUB VALIDATION`.
+Pipeline status: `IMPLEMENTED, SPLIT BY TRIGGER TYPE, AND VALIDATED IN GITHUB ACTIONS`.
 
 Files implemented:
 
@@ -12,6 +12,7 @@ Files implemented:
 - `.github/actions/repo-validate/action.yml`
 - `.github/actions/terraform-plan/action.yml`
 - `.github/actions/restore-plan-artifact/action.yml`
+- `.github/workflows/repair-bedrock-data-source.yml`
 - `.github/workflows/terraform-pr-plan.yml`
 - `.github/workflows/terraform-dispatch.yml`
 - `scripts/detect_terraform_stacks.sh`
@@ -124,9 +125,13 @@ GitHub Actions validation on July 30, 2026:
 - Manual apply run `30551578404` failed and exposed two fixes:
   - CloudFront disabled-cache policy cannot use `query_string_behavior = "all"`
   - exact-plan apply must restore Lambda ZIP artifacts generated during plan
+- Repair workflow run `30581281039` succeeded and updated the live Bedrock data source to `dataDeletionPolicy = RETAIN`
+- Manual trusted plan run `30581357958` succeeded on `main`
+- Manual exact apply run `30581480625` succeeded from source run `30581357958`
+- Live verification after apply returned HTTP `200` from CloudFront and a citation-backed Kubernetes response from the deployed API
 
 ## Open issues
-The split workflow files and Terraform 1.15.1 pin need a fresh GitHub-hosted PR-plan run plus a dispatch plan/apply revalidation after the 2026-07-30 refactor. SonarCloud is still failing separately and is not part of the Terraform promotion path.
+The Bedrock repair workflow is intended only for exceptional recovery when an existing data source is already stuck in `DELETE_UNSUCCESSFUL`; normal create, plan, apply, and destroy continue through the standard Terraform workflows. SonarCloud is still failing separately and is not part of the Terraform promotion path.
 
 ## Change log
 - 2026-07-28: Initialized pipeline context with required behavior and risks.
@@ -136,3 +141,4 @@ The split workflow files and Terraform 1.15.1 pin need a fresh GitHub-hosted PR-
 - 2026-07-30: Replaced repeated workflow shell blocks with focused composite actions for repository validation, plan packaging, and saved-plan restoration.
 - 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for the fixed working directory, backend state settings, and deployment role settings.
 - 2026-07-30: Simplified the single-root pipeline further by removing stack/environment workflow inputs, moving to one fixed `TF_STATE_KEY`, shortening artifact names, and reducing destroy confirmation noise.
+- 2026-07-30: Added a one-off Bedrock data-source repair workflow, validated the repair in GitHub Actions, and confirmed the normal dispatch plan/apply path succeeds afterward.
