@@ -121,6 +121,7 @@ def _build_prompt(message: str, history: List[Dict[str, Any]], citations: List[D
 
 def _invoke_model(model_id: str, prompt: str) -> str:
     body = {
+        "schemaVersion": "messages-v1",
         "messages": [{"role": "user", "content": [{"text": prompt}]}],
         "inferenceConfig": {"maxTokens": MAX_GENERATION_TOKENS, "temperature": 0.2},
     }
