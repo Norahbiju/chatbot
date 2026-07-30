@@ -73,6 +73,7 @@ runs:
       with:
         aws-region: ${{ inputs.aws-region }}
         role-to-assume: ${{ inputs.role-to-assume }}
+        audience: sts.amazonaws.com
         role-session-name: github-actions-terraform
 
     - name: Verify AWS identity
