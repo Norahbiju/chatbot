@@ -117,6 +117,7 @@ jobs:
     needs: static-validation
     permissions:
       contents: read
+      issues: write
       pull-requests: write
     steps:
       - name: Explain skipped AWS plan
@@ -146,6 +147,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      issues: write
       actions: read
     env:
       STATE_KEY: ${{ vars.TF_STATE_PREFIX }}/dev/terraform.tfstate
