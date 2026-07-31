@@ -28,6 +28,8 @@ flowchart LR
 - `documents/` contains the sample knowledge-base corpus.
 - `ai_context/` records the current architecture, IAM, pipeline, and application behavior.
 
+This repository is intentionally kept framework-light to stay easy to review and inexpensive to run.
+
 ## Prerequisites
 
 - Terraform `1.15.1` or newer compatible with the pinned lock file
