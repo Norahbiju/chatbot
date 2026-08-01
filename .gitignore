@@ -16,4 +16,5 @@ __pycache__/
 .coverage
 .venv/
 .venv-test/
+.codex-venv/
 .tmp-*/

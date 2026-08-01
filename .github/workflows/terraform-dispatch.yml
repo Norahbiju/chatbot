@@ -20,6 +20,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 concurrency:
   group: terraform-${{ github.event_name }}-${{ github.run_id }}
@@ -29,8 +30,6 @@ jobs:
   static-validation:
     name: Static validation
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,12 +87,11 @@ jobs:
       - name: Terraform plan package
         id: plan
         uses: ./.github/actions/terraform-plan
-        env:
-          TF_VAR_alert_email: ${{ vars.TF_ALERT_EMAIL }}
-          TF_VAR_monthly_budget_limit_usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
         with:
           working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
           mode: manual
+          alert-email: ${{ vars.TF_ALERT_EMAIL }}
+          monthly-budget-limit-usd: ${{ vars.TF_MONTHLY_BUDGET_LIMIT_USD }}
           state-key: ${{ vars.TF_STATE_KEY }}
           workflow-file: .github/workflows/terraform-dispatch.yml
           terraform-version: ${{ steps.tfversion.outputs.version }}
@@ -123,10 +121,6 @@ jobs:
     name: Apply exact saved plan
     if: inputs.action == 'apply'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-      actions: read
     concurrency:
       group: terraform-main
       cancel-in-progress: false
@@ -215,9 +209,6 @@ jobs:
     name: Destroy plan
     if: inputs.action == 'destroy'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -301,10 +292,6 @@ jobs:
     if: inputs.action == 'destroy'
     runs-on: ubuntu-latest
     needs: destroy-plan
-    permissions:
-      id-token: write
-      contents: read
-      actions: read
     concurrency:
       group: terraform-main
       cancel-in-progress: false

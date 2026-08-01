@@ -15,7 +15,7 @@ variable "environment" {
 
 variable "repository" {
   type    = string
-  default = "chatbot-aws"
+  default = "chatbot"
 }
 
 variable "cost_center" {

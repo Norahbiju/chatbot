@@ -8,6 +8,14 @@ inputs:
   mode:
     required: true
     description: "Plan mode: speculative, manual, or destroy."
+  alert-email:
+    required: false
+    default: ""
+    description: Optional CloudWatch alarm notification email.
+  monthly-budget-limit-usd:
+    required: false
+    default: ""
+    description: Optional monthly AWS budget limit in USD.
   state-key:
     required: true
     description: Terraform backend state key.
@@ -97,6 +105,12 @@ runs:
         args=(-input=false -lock-timeout=5m -detailed-exitcode -out="${{ steps.paths.outputs.plan_file }}")
         if [[ -f terraform.tfvars ]]; then
           args+=("-var-file=terraform.tfvars")
+        fi
+        if [[ -n "${{ inputs.alert-email }}" ]]; then
+          args+=("-var=alert_email=${{ inputs.alert-email }}")
+        fi
+        if [[ -n "${{ inputs.monthly-budget-limit-usd }}" ]]; then
+          args+=("-var=monthly_budget_limit_usd=${{ inputs.monthly-budget-limit-usd }}")
         fi
         set +e
         terraform plan "${args[@]}" > tfplan.raw.txt 2>&1

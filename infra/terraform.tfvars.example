@@ -1,7 +1,7 @@
 aws_region                = "ap-south-1"
 project_name              = "bedrock-rag"
 environment               = "dev"
-repository                = "chatbot-aws"
+repository                = "chatbot"
 document_prefix           = "documents/"
 monthly_budget_limit_usd  = "5"
 # alert_email             = "replace-with-confirmed-email@example.com"
