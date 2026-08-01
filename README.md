@@ -116,7 +116,6 @@ Suggested values:
 
 ```text
 AWS_REGION=ap-south-1
-AWS_ROLE_ARN=arn:aws:iam::<account-id>:role/aws-chatbot
 TF_WORKING_DIRECTORY=infra
 TF_STATE_REGION=ap-south-1
 TF_STATE_KEY=bedrock-rag/dev/terraform.tfstate
