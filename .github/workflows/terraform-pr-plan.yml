@@ -16,9 +16,7 @@ on:
       - ".terraform-version"
 
 permissions:
-  id-token: write
   contents: read
-  issues: write
 
 jobs:
   static-validation:
@@ -46,6 +44,11 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     needs: static-validation
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,7 +66,7 @@ jobs:
           working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
           terraform-version: ${{ steps.tfversion.outputs.version }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::484632959006:role/chatbot
           aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           state-bucket: ${{ vars.TF_STATE_BUCKET }}
           state-region: ${{ vars.TF_STATE_REGION }}
