@@ -32,6 +32,7 @@ Repository variables:
 
 - `AWS_REGION`
 - `AWS_ACCOUNT_ID`
+- `AWS_ROLE_ARN`
 - `TF_WORKING_DIRECTORY`
 - `TF_STATE_BUCKET`
 - `TF_STATE_REGION`
@@ -39,7 +40,7 @@ Repository variables:
 - `TF_ALERT_EMAIL`
 - `TF_MONTHLY_BUDGET_LIMIT_USD`
 
-The workflows now read the fixed working directory and backend state key from repository variables instead of workflow-level `env` blocks. The deployment role ARN is hardcoded as `arn:aws:iam::484632959006:role/aws-chatbot`.
+The workflows now read the fixed working directory, backend state key, and deployment role ARN from repository variables instead of workflow-level `env` blocks.
 
 State key:
 
@@ -134,6 +135,6 @@ SonarCloud is still failing separately and is not part of the Terraform promotio
 - 2026-07-30: Fixed PR comment permissions, fixed CloudFront disabled-cache policy settings, and updated the manual plan/apply artifact flow to carry Lambda ZIP bundles into exact-plan apply.
 - 2026-07-30: Split the workflow into dedicated PR-plan and dispatch files, removed the fork PR note path, simplified duplicated workflow steps, and updated the Terraform pin to 1.15.1.
 - 2026-07-30: Replaced repeated workflow shell blocks with focused composite actions for repository validation, plan packaging, and saved-plan restoration.
-- 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for the fixed working directory and backend state settings.
+- 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for the fixed working directory, backend state settings, and deployment role settings.
 - 2026-07-30: Simplified the single-root pipeline further by removing stack/environment workflow inputs, moving to one fixed `TF_STATE_KEY`, shortening artifact names, and reducing destroy confirmation noise.
 - 2026-07-30: Used a temporary Bedrock data-source repair workflow to recover a stuck live resource, then removed that one-off workflow after normal dispatch plan/apply validation succeeded.
