@@ -73,7 +73,7 @@ runs:
         echo "${claims}" | jq '{sub,aud,repository,repository_owner,ref,workflow,event_name,job_workflow_ref}'
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v6.2.3
       with:
         aws-region: ${{ inputs.aws-region }}
         role-to-assume: ${{ inputs.role-to-assume }}
