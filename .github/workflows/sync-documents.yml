@@ -80,7 +80,7 @@ jobs:
               --knowledge-base-id "${kb_id}" \
               --data-source-id "${ds_id}" \
               --description "GitHub Actions document sync" \
-              --client-token "gha-doc-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              --client-token "github-actions-document-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
               --query 'ingestionJob.ingestionJobId' \
               --output text)"
             echo "Started ingestion job ${job_id}."
