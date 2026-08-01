@@ -1,20 +1,17 @@
 module "core" {
   source = "./modules/core"
 
-  aws_region                  = var.aws_region
-  project_name                = var.project_name
-  environment                 = var.environment
-  repository                  = var.repository
-  cost_center                 = var.cost_center
-  document_prefix             = var.document_prefix
-  force_destroy_buckets       = var.force_destroy_buckets
-  embedding_model_id          = var.embedding_model_id
-  generation_model_id         = var.generation_model_id
-  embedding_dimensions        = var.embedding_dimensions
-  alert_email                 = var.alert_email
-  lambda_runtime              = var.lambda_runtime
-  reserved_concurrency        = var.ingestion_lambda_reserved_concurrency
-  lambda_error_rate_threshold = var.lambda_error_rate_threshold
+  aws_region            = var.aws_region
+  project_name          = var.project_name
+  environment           = var.environment
+  repository            = var.repository
+  cost_center           = var.cost_center
+  document_prefix       = var.document_prefix
+  force_destroy_buckets = var.force_destroy_buckets
+  embedding_model_id    = var.embedding_model_id
+  generation_model_id   = var.generation_model_id
+  embedding_dimensions  = var.embedding_dimensions
+  alert_email           = var.alert_email
 }
 
 module "application" {

@@ -4,11 +4,9 @@ This repository contains a low-cost Amazon Bedrock RAG chatbot implemented as on
 
 ```mermaid
 flowchart LR
-  D[Markdown documents] --> S3[(Private source S3)]
-  S3 --> EB[EventBridge]
-  EB --> Q[SQS queue]
-  Q --> IL[Ingestion Lambda]
-  IL --> KB[Bedrock Knowledge Base]
+  D[Markdown documents] --> SD[Sync Documents workflow]
+  SD --> S3[(Private source S3)]
+  S3 --> KB[Bedrock Knowledge Base]
   KB --> SV[(S3 Vectors)]
   B[Browser] --> CF[CloudFront]
   CF --> API[HTTP API]
@@ -21,9 +19,9 @@ flowchart LR
 ## Repository Structure
 
 - `infra/` is the single Terraform root.
-- `infra/modules/core/` creates documents, vectors, the Knowledge Base, ingestion, SNS, alarms, and SSM parameters.
+- `infra/modules/core/` creates the source document bucket, S3 Vectors resources, the Knowledge Base, SNS, and SSM parameters.
 - `infra/modules/application/` creates DynamoDB, query Lambda, API Gateway, frontend hosting, CloudFront, alarms, and the monthly budget.
-- `src/` contains the ingestion and query Lambda handlers plus unit tests.
+- `src/` contains the query Lambda handler plus unit tests.
 - `frontend/` contains the vanilla HTML, CSS, and JavaScript chat UI.
 - `documents/` contains the sample knowledge-base corpus.
 - `ai_context/` records the current architecture, IAM, pipeline, and application behavior.
@@ -66,7 +64,6 @@ bedrock-rag/dev/terraform.tfstate
 terraform fmt -check -recursive
 terraform -chdir=infra init -backend=false
 terraform -chdir=infra validate
-python -m unittest discover -s src/ingestion_lambda/tests
 python -m unittest discover -s src/query_lambda/tests
 python -m unittest discover -s scripts/tests
 python scripts/validate_iam.py
@@ -85,10 +82,11 @@ That means the whole system can be planned and applied in one run while still ke
 
 ## GitHub Actions Pipeline
 
-The repository includes two Terraform workflows:
+The repository includes two Terraform workflows and one document workflow:
 
 - `.github/workflows/terraform-pr-plan.yml` for speculative PR plans and sticky PR comments
 - `.github/workflows/terraform-dispatch.yml` for manual `plan`, `apply`, and `destroy`
+- `.github/workflows/sync-documents.yml` for syncing `documents/` to S3 and running Bedrock ingestion
 
 It supports:
 
@@ -107,7 +105,8 @@ AWS_REGION
 AWS_ACCOUNT_ID
 TF_STATE_BUCKET
 TF_STATE_REGION
-TF_STATE_PREFIX
+TF_WORKING_DIRECTORY
+TF_STATE_KEY
 TF_ALERT_EMAIL
 TF_MONTHLY_BUDGET_LIMIT_USD
 ```
@@ -132,6 +131,12 @@ Manual apply uses the exact saved plan artifact:
 
 ```text
 Actions -> Terraform Dispatch -> Run workflow -> action=apply, source_run_id=<manual-plan-run-id>
+```
+
+Sync Knowledge Base documents after infrastructure changes or content changes:
+
+```text
+Actions -> Sync Documents -> Run workflow
 ```
 
 Manual destroy requires an exact confirmation string:
@@ -161,7 +166,7 @@ Successful responses contain `sessionId`, `answer`, and numbered `citations`.
 
 ## Documents and Ingestion
 
-Terraform uploads the Markdown files under `documents/` to the private source bucket. S3 emits EventBridge object events, EventBridge sends them to SQS, and the ingestion Lambda starts a Bedrock Knowledge Base ingestion job when no active job already exists.
+Terraform creates the private source bucket and Bedrock Knowledge Base data source. The separate `Sync Documents` GitHub Actions workflow uploads files from `documents/` to the configured S3 prefix, deletes removed objects with `aws s3 sync --delete`, starts a Bedrock Knowledge Base ingestion job, and waits for completion.
 
 ## Frontend
 
@@ -169,7 +174,7 @@ The frontend stores only a random browser session ID in `localStorage`, sends me
 
 ## Alarms and Budget
 
-CloudWatch alarms monitor ingestion Lambda error rate, query Lambda error rate, API Gateway 5xx rate, and DynamoDB throttling. An AWS monthly cost budget defaults to `$5` and sends notifications to the shared SNS topic.
+CloudWatch alarms monitor query Lambda error rate, API Gateway 5xx rate, and DynamoDB throttling. An AWS monthly cost budget defaults to `$5` and sends notifications to the shared SNS topic.
 
 ## Troubleshooting
 

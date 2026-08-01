@@ -8,7 +8,6 @@ locals {
   kb_arn            = "arn:${data.aws_partition.current.partition}:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${aws_bedrockagent_knowledge_base.this.id}"
   vector_bucket_arn = "arn:${data.aws_partition.current.partition}:s3vectors:${var.aws_region}:${data.aws_caller_identity.current.account_id}:bucket/${aws_s3vectors_vector_bucket.this.vector_bucket_name}"
   vector_index_arn  = "arn:${data.aws_partition.current.partition}:s3vectors:${var.aws_region}:${data.aws_caller_identity.current.account_id}:bucket/${aws_s3vectors_vector_bucket.this.vector_bucket_name}/index/${aws_s3vectors_index.this.index_name}"
-  document_files    = fileset("${path.module}/../../../documents", "*.md")
   document_prefix   = trimsuffix(var.document_prefix, "/")
 
   base_tags = {
