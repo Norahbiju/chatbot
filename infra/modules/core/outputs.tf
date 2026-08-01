@@ -2,6 +2,10 @@ output "source_document_bucket_name" {
   value = aws_s3_bucket.source_documents.bucket
 }
 
+output "document_prefix" {
+  value = "${local.document_prefix}/"
+}
+
 output "vector_bucket_arn" {
   value = local.vector_bucket_arn
 }
@@ -20,14 +24,6 @@ output "knowledge_base_arn" {
 
 output "data_source_id" {
   value = aws_bedrockagent_data_source.documents.data_source_id
-}
-
-output "ingestion_queue_url" {
-  value = aws_sqs_queue.ingestion.url
-}
-
-output "ingestion_dlq_url" {
-  value = aws_sqs_queue.ingestion_dlq.url
 }
 
 output "sns_topic_arn" {

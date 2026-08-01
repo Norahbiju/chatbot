@@ -2,6 +2,10 @@ output "source_document_bucket_name" {
   value = module.core.source_document_bucket_name
 }
 
+output "document_prefix" {
+  value = module.core.document_prefix
+}
+
 output "vector_bucket_arn" {
   value = module.core.vector_bucket_arn
 }
@@ -20,14 +24,6 @@ output "knowledge_base_arn" {
 
 output "data_source_id" {
   value = module.core.data_source_id
-}
-
-output "ingestion_queue_url" {
-  value = module.core.ingestion_queue_url
-}
-
-output "ingestion_dlq_url" {
-  value = module.core.ingestion_dlq_url
 }
 
 output "sns_topic_arn" {

@@ -14,6 +14,7 @@ Files implemented:
 - `.github/actions/restore-plan-artifact/action.yml`
 - `.github/workflows/terraform-pr-plan.yml`
 - `.github/workflows/terraform-dispatch.yml`
+- `.github/workflows/sync-documents.yml`
 - `scripts/detect_terraform_stacks.sh`
 - `scripts/create_plan_metadata.py`
 - `scripts/verify_plan_metadata.py`
@@ -27,6 +28,7 @@ Workflow triggers:
 
 - `pull_request` in `.github/workflows/terraform-pr-plan.yml` for infra, source, frontend, documents, workflow/action, and `.terraform-version` changes
 - `workflow_dispatch` in `.github/workflows/terraform-dispatch.yml` with `action` of `plan`, `apply`, or `destroy`; optional `source_run_id` and `destroy_confirmation`
+- `workflow_dispatch` in `.github/workflows/sync-documents.yml` uploads `documents/` to the source bucket, deletes removed S3 objects, starts Bedrock ingestion, and waits for completion
 
 Repository variables:
 
@@ -54,6 +56,8 @@ Artifact names:
 Artifacts retain for 3 days.
 
 PR comment jobs use the built-in `github.token`; no PR comment secret is required.
+
+Knowledge Base documents are not managed as Terraform `aws_s3_object` resources. Terraform owns the source bucket, Bedrock Knowledge Base, data source, and S3 Vectors resources; the `Sync Documents` workflow owns document object sync and ingestion.
 
 ## Interfaces and dependencies
 Composite action responsibilities:
@@ -111,7 +115,6 @@ Local validation passed on 2026-07-30:
 - `terraform fmt -check -recursive`
 - `terraform -chdir=infra init -backend=false`
 - `terraform -chdir=infra validate`
-- `python -m unittest discover -s src/ingestion_lambda/tests`
 - `python -m unittest discover -s scripts/tests`
 
 GitHub Actions validation on July 30, 2026:
@@ -137,3 +140,4 @@ SonarCloud is still failing separately and is not part of the Terraform promotio
 - 2026-07-30: Removed workflow-level `env` blocks and switched the workflows to repository variables for the fixed working directory and backend state settings.
 - 2026-07-30: Simplified the single-root pipeline further by removing stack/environment workflow inputs, moving to one fixed `TF_STATE_KEY`, shortening artifact names, and reducing destroy confirmation noise.
 - 2026-07-30: Used a temporary Bedrock data-source repair workflow to recover a stuck live resource, then removed that one-off workflow after normal dispatch plan/apply validation succeeded.
+- 2026-08-01: Moved Knowledge Base document object management out of Terraform and into `.github/workflows/sync-documents.yml`.

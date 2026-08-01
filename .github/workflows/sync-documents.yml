@@ -1,4 +1,4 @@
-name: Sync KnowledgeBase
+name: Sync Documents
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   sync:
-    name: Start and watch KB ingestion
+    name: Sync documents and ingest
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,41 +32,77 @@ jobs:
           state-region: ${{ vars.TF_STATE_REGION }}
           state-key: ${{ vars.TF_STATE_KEY }}
 
-      - name: Start ingestion job
-        id: ingest
+      - name: Resolve Knowledge Base storage
+        id: kb
         shell: bash
         working-directory: ${{ vars.TF_WORKING_DIRECTORY }}
         run: |
           set -Eeuo pipefail
+          bucket="$(terraform output -raw source_document_bucket_name)"
+          prefix="$(terraform output -raw document_prefix)"
           kb_id="$(terraform output -raw knowledge_base_id)"
           ds_id="$(terraform output -raw data_source_id)"
-          job_id="$(aws bedrock-agent start-ingestion-job \
-            --knowledge-base-id "${kb_id}" \
-            --data-source-id "${ds_id}" \
-            --description "Manual resync from GitHub Actions after ingestion Lambda fix" \
-            --client-token "gha-manual-sync-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}" \
-            --query 'ingestionJob.ingestionJobId' \
-            --output text)"
+          echo "bucket=${bucket}" >> "${GITHUB_OUTPUT}"
+          echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
           echo "kb_id=${kb_id}" >> "${GITHUB_OUTPUT}"
           echo "ds_id=${ds_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sync documents to S3
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          destination="s3://${{ steps.kb.outputs.bucket }}/${{ steps.kb.outputs.prefix }}"
+          aws s3 sync documents/ "${destination}" --delete
+          {
+            echo "## Document sync"
+            echo
+            echo "- Bucket: \`${{ steps.kb.outputs.bucket }}\`"
+            echo "- Prefix: \`${{ steps.kb.outputs.prefix }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Start ingestion job
+        id: ingest
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          kb_id="${{ steps.kb.outputs.kb_id }}"
+          ds_id="${{ steps.kb.outputs.ds_id }}"
+          active="$(aws bedrock-agent list-ingestion-jobs \
+            --knowledge-base-id "${kb_id}" \
+            --data-source-id "${ds_id}" \
+            --query 'ingestionJobSummaries[?status==`STARTING` || status==`IN_PROGRESS`].ingestionJobId | [0]' \
+            --output text)"
+          if [[ -n "${active}" && "${active}" != "None" ]]; then
+            job_id="${active}"
+            echo "Using active ingestion job ${job_id}."
+          else
+            job_id="$(aws bedrock-agent start-ingestion-job \
+              --knowledge-base-id "${kb_id}" \
+              --data-source-id "${ds_id}" \
+              --description "GitHub Actions document sync" \
+              --client-token "gha-doc-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              --query 'ingestionJob.ingestionJobId' \
+              --output text)"
+            echo "Started ingestion job ${job_id}."
+          fi
           echo "job_id=${job_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Wait for ingestion completion
         shell: bash
         run: |
           set -Eeuo pipefail
-          kb_id="${{ steps.ingest.outputs.kb_id }}"
-          ds_id="${{ steps.ingest.outputs.ds_id }}"
+          kb_id="${{ steps.kb.outputs.kb_id }}"
+          ds_id="${{ steps.kb.outputs.ds_id }}"
           job_id="${{ steps.ingest.outputs.job_id }}"
 
-          echo "## Knowledge Base sync" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Knowledge Base ID: \`${kb_id}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Data Source ID: \`${ds_id}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Ingestion Job ID: \`${job_id}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "- Knowledge Base ID: \`${kb_id}\`"
+            echo "- Data Source ID: \`${ds_id}\`"
+            echo "- Ingestion Job ID: \`${job_id}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
 
-          for _ in $(seq 1 60); do
+          for _ in $(seq 1 90); do
             status="$(aws bedrock-agent get-ingestion-job \
               --knowledge-base-id "${kb_id}" \
               --data-source-id "${ds_id}" \

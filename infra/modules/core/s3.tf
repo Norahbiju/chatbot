@@ -83,21 +83,11 @@ resource "aws_s3_bucket_policy" "source_documents" {
   policy = data.aws_iam_policy_document.source_documents_tls_only.json
 }
 
-resource "aws_s3_bucket_notification" "eventbridge" {
-  bucket      = aws_s3_bucket.source_documents.id
-  eventbridge = true
+removed {
+  from = aws_s3_object.documents
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "aws_s3_object" "documents" {
-  for_each     = local.document_files
-  bucket       = aws_s3_bucket.source_documents.id
-  key          = "${local.document_prefix}/${each.value}"
-  source       = "${path.module}/../../../documents/${each.value}"
-  etag         = filemd5("${path.module}/../../../documents/${each.value}")
-  content_type = "text/markdown; charset=utf-8"
-
-  depends_on = [
-    aws_lambda_event_source_mapping.ingestion,
-    aws_cloudwatch_event_target.ingestion_queue
-  ]
-}

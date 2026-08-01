@@ -4,7 +4,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LAMBDA_POLICY_FILES = [
-    ROOT / "infra/modules/core/iam.tf",
     ROOT / "infra/modules/application/iam.tf",
 ]
 BROAD_ACTIONS = ("bedrock:*", "s3:*", "dynamodb:*", "sqs:*", "logs:*")

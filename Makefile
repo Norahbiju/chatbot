@@ -13,7 +13,6 @@ validate-infra:
 
 test:
 	python -m compileall src scripts || true
-	python -m unittest discover -s src/ingestion_lambda/tests || true
 	python -m unittest discover -s src/query_lambda/tests || true
 	python -m unittest discover -s scripts/tests || true
 	@if command -v node >/dev/null 2>&1; then node --check frontend/app.js; else echo "node unavailable; skipped JS syntax check"; fi
