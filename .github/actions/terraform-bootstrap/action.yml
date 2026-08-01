@@ -26,6 +26,10 @@ inputs:
   state-key:
     required: true
     description: Stack-specific Terraform state key.
+  aws-profile:
+    required: false
+    default: github-actions
+    description: Named AWS profile used for Terraform and AWS CLI commands.
 
 outputs:
   backend-config:
@@ -75,6 +79,15 @@ runs:
         role-to-assume: ${{ inputs.role-to-assume }}
         audience: sts.amazonaws.com
         role-session-name: github-actions-terraform
+        aws-profile: ${{ inputs.aws-profile }}
+        output-env-credentials: false
+        overwrite-aws-profile: true
+
+    - name: Use AWS profile
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        echo "AWS_PROFILE=${{ inputs.aws-profile }}" >> "${GITHUB_ENV}"
 
     - name: Verify AWS identity
       shell: bash
