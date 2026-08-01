@@ -1,4 +1,4 @@
-name: Sync Knowledge Base
+name: Sync KnowledgeBase
 
 on:
   workflow_dispatch:

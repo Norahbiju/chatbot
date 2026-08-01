@@ -9,7 +9,7 @@ Implemented locally in Terraform module files:
 - `infra/modules/core/iam.tf`
 - `infra/modules/application/iam.tf`
 
-Roles:
+Roles
 
 - Bedrock Knowledge Base service role
 - ingestion Lambda role
