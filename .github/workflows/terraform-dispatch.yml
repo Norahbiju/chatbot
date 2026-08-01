@@ -11,6 +11,7 @@ on:
           - apply
           - destroy
       source_run_id:
+        description: "Workflow run ID from a successful Terraform Dispatch plan run, not a job ID."
         required: false
         type: string
       destroy_confirmation:
@@ -140,8 +141,21 @@ jobs:
         with:
           script: |
             const run_id = Number('${{ inputs.source_run_id }}');
+            if (!Number.isInteger(run_id) || run_id <= 0) {
+              core.setFailed('source_run_id must be the numeric workflow run ID from the successful Terraform Dispatch plan run.');
+              return;
+            }
             const {owner, repo} = context.repo;
-            const run = await github.rest.actions.getWorkflowRun({owner, repo, run_id});
+            let run;
+            try {
+              run = await github.rest.actions.getWorkflowRun({owner, repo, run_id});
+            } catch (error) {
+              if (error.status === 404) {
+                core.setFailed(`Could not find workflow run ${run_id}. Use the Actions run ID from the successful Terraform Dispatch plan URL, not a job ID. Example URL: /actions/runs/${context.runId}`);
+                return;
+              }
+              throw error;
+            }
             if (run.data.repository.full_name !== `${owner}/${repo}`) core.setFailed('Source run repository mismatch.');
             if (run.data.path !== '.github/workflows/terraform-dispatch.yml') core.setFailed('Source run workflow file mismatch.');
             if (run.data.event !== 'workflow_dispatch') core.setFailed('Source run was not workflow_dispatch.');
