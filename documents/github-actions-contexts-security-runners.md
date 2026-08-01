@@ -103,4 +103,3 @@ Cache content is an optimization. It is not the reviewed output of a trusted wor
 - Treat OIDC trust conditions as part of the security model, not optional polish.
 - Choose runners based on trust, networking, and lifecycle requirements.
 - Treat caching as acceleration, not as a substitute for exact artifact promotion.
-hi
