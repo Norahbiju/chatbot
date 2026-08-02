@@ -4,7 +4,7 @@
 Build a minimal Bedrock RAG chatbot that answers from a curated Markdown corpus, stores per-session conversation history in DynamoDB with TTL, and serves a safe vanilla frontend through CloudFront.
 
 ## Current state
-Implemented locally. The query Lambda accepts API Gateway HTTP API payload version 2.0 requests at `POST /api/chat`, retrieves evidence with Bedrock Knowledge Bases `Retrieve`, invokes the configured model through `InvokeModel`, stores user and assistant messages separately, and returns citations. Knowledge Base document uploads and ingestion are handled by the `Sync Documents` GitHub Actions workflow.
+Implemented locally. The query Lambda accepts API Gateway HTTP API payload version 2.0 requests at `POST /api/chat`, retrieves evidence with Bedrock Knowledge Bases `Retrieve`, invokes the configured model through `InvokeModel`, stores user and assistant messages separately, and returns citations. Knowledge Base document uploads are handled by the `Sync Documents` GitHub Actions workflow; ingestion is triggered automatically from S3 object changes through EventBridge, SQS, and the ingestion Lambda.
 
 The Terraform root packages the query Lambda through an `archive_file` data source inside `infra/modules/application`. The knowledge-base corpus now goes beyond the original three overview notes and includes additional curated documents on GitHub Actions workflow syntax, contexts and runners, Kubernetes networking and policy, Kubernetes stateful/storage/security behavior, Terraform language and CLI behavior, and Terraform AWS provider serverless patterns.
 
@@ -38,4 +38,5 @@ Requires AWS deployment validation for the final Bedrock generation-model switch
 - 2026-07-30: Switched the query path from direct `amazon.nova-micro-v1:0` invocation to an APAC inference-profile model ID because live diagnostics showed on-demand invocation was not supported from `ap-south-1`.
 - 2026-07-30: Expanded the curated knowledge-base corpus with additional intermediate GitHub Actions, Kubernetes, and Terraform notes derived from official documentation themes.
 - 2026-07-30: Verified the deployed chat path end to end after the Bedrock data-source repair; CloudFront served the frontend and the API returned grounded Kubernetes citations.
-- 2026-08-01: Moved Knowledge Base document sync and ingestion out of the application runtime and into the `Sync Documents` GitHub Actions workflow.
+- 2026-08-01: Moved Knowledge Base document uploads out of Terraform and into the `Sync Documents` GitHub Actions workflow.
+- 2026-08-02: Restored automatic ingestion from S3 document changes through EventBridge, SQS, and the ingestion Lambda.

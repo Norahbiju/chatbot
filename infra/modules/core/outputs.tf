@@ -30,6 +30,18 @@ output "sns_topic_arn" {
   value = aws_sns_topic.alerts.arn
 }
 
+output "ingestion_queue_url" {
+  value = aws_sqs_queue.ingestion.url
+}
+
+output "ingestion_dlq_url" {
+  value = aws_sqs_queue.ingestion_dlq.url
+}
+
+output "ingestion_lambda_name" {
+  value = aws_lambda_function.ingestion.function_name
+}
+
 output "ssm_parameter_names" {
   value = {
     knowledge_base_id = aws_ssm_parameter.knowledge_base_id.name

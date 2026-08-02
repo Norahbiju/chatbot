@@ -68,6 +68,11 @@ variable "query_lambda_reserved_concurrency" {
   default = null
 }
 
+variable "ingestion_lambda_reserved_concurrency" {
+  type    = number
+  default = null
+}
+
 variable "lambda_error_rate_threshold" {
   type    = number
   default = 5

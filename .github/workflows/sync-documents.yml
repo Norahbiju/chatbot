@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   sync:
-    name: Sync documents and ingest
+    name: Sync documents
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,12 +40,8 @@ jobs:
           set -Eeuo pipefail
           bucket="$(terraform output -raw source_document_bucket_name)"
           prefix="$(terraform output -raw document_prefix)"
-          kb_id="$(terraform output -raw knowledge_base_id)"
-          ds_id="$(terraform output -raw data_source_id)"
           echo "bucket=${bucket}" >> "${GITHUB_OUTPUT}"
           echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
-          echo "kb_id=${kb_id}" >> "${GITHUB_OUTPUT}"
-          echo "ds_id=${ds_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Sync documents to S3
         shell: bash
@@ -58,87 +54,5 @@ jobs:
             echo
             echo "- Bucket: \`${{ steps.kb.outputs.bucket }}\`"
             echo "- Prefix: \`${{ steps.kb.outputs.prefix }}\`"
+            echo "- Ingestion: automatic through S3 EventBridge, SQS, and Lambda"
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Start ingestion job
-        id: ingest
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          kb_id="${{ steps.kb.outputs.kb_id }}"
-          ds_id="${{ steps.kb.outputs.ds_id }}"
-          active="$(aws bedrock-agent list-ingestion-jobs \
-            --knowledge-base-id "${kb_id}" \
-            --data-source-id "${ds_id}" \
-            --query 'ingestionJobSummaries[?status==`STARTING` || status==`IN_PROGRESS`].ingestionJobId | [0]' \
-            --output text)"
-          if [[ -n "${active}" && "${active}" != "None" ]]; then
-            job_id="${active}"
-            echo "Using active ingestion job ${job_id}."
-          else
-            job_id="$(aws bedrock-agent start-ingestion-job \
-              --knowledge-base-id "${kb_id}" \
-              --data-source-id "${ds_id}" \
-              --description "GitHub Actions document sync" \
-              --client-token "github-actions-document-sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-              --query 'ingestionJob.ingestionJobId' \
-              --output text)"
-            echo "Started ingestion job ${job_id}."
-          fi
-          echo "job_id=${job_id}" >> "${GITHUB_OUTPUT}"
-
-      - name: Wait for ingestion completion
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          kb_id="${{ steps.kb.outputs.kb_id }}"
-          ds_id="${{ steps.kb.outputs.ds_id }}"
-          job_id="${{ steps.ingest.outputs.job_id }}"
-
-          {
-            echo "- Knowledge Base ID: \`${kb_id}\`"
-            echo "- Data Source ID: \`${ds_id}\`"
-            echo "- Ingestion Job ID: \`${job_id}\`"
-            echo
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          for _ in $(seq 1 90); do
-            status="$(aws bedrock-agent get-ingestion-job \
-              --knowledge-base-id "${kb_id}" \
-              --data-source-id "${ds_id}" \
-              --ingestion-job-id "${job_id}" \
-              --query 'ingestionJob.status' \
-              --output text)"
-            stats="$(aws bedrock-agent get-ingestion-job \
-              --knowledge-base-id "${kb_id}" \
-              --data-source-id "${ds_id}" \
-              --ingestion-job-id "${job_id}" \
-              --query 'ingestionJob.statistics' \
-              --output json)"
-            echo "Current status: ${status}"
-            if [[ "${status}" == "COMPLETE" ]]; then
-              {
-                echo "- Final status: \`${status}\`"
-                echo "- Statistics: \`${stats}\`"
-              } >> "${GITHUB_STEP_SUMMARY}"
-              exit 0
-            fi
-            if [[ "${status}" == "FAILED" || "${status}" == "STOPPED" ]]; then
-              failure_reasons="$(aws bedrock-agent get-ingestion-job \
-                --knowledge-base-id "${kb_id}" \
-                --data-source-id "${ds_id}" \
-                --ingestion-job-id "${job_id}" \
-                --query 'ingestionJob.failureReasons' \
-                --output json)"
-              {
-                echo "- Final status: \`${status}\`"
-                echo "- Failure reasons: \`${failure_reasons}\`"
-              } >> "${GITHUB_STEP_SUMMARY}"
-              echo "Ingestion failed: ${failure_reasons}" >&2
-              exit 1
-            fi
-            sleep 10
-          done
-
-          echo "Timed out waiting for ingestion job ${job_id}" >&2
-          exit 1
