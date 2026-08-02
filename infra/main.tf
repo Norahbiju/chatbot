@@ -12,6 +12,10 @@ module "core" {
   generation_model_id   = var.generation_model_id
   embedding_dimensions  = var.embedding_dimensions
   alert_email           = var.alert_email
+  lambda_runtime        = var.lambda_runtime
+
+  ingestion_lambda_reserved_concurrency = var.ingestion_lambda_reserved_concurrency
+  lambda_error_rate_threshold           = var.lambda_error_rate_threshold
 }
 
 module "application" {
@@ -33,7 +37,7 @@ module "application" {
   lambda_error_rate_threshold = var.lambda_error_rate_threshold
   api_rate_limit              = var.api_rate_limit
   api_burst_limit             = var.api_burst_limit
-  knowledge_base_id           = module.core.knowledge_base_id
-  model_id                    = var.generation_model_id
-  alert_topic_arn             = module.core.sns_topic_arn
+  knowledge_base_id           = data.aws_ssm_parameter.knowledge_base_id.value
+  model_id                    = data.aws_ssm_parameter.model_id.value
+  alert_topic_arn             = data.aws_ssm_parameter.alert_topic_arn.value
 }

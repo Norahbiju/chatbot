@@ -8,6 +8,7 @@ terraform -chdir=infra validate
 if command -v python >/dev/null 2>&1; then
   python -m compileall src scripts
   python -m unittest discover -s src/query_lambda/tests
+  python -m unittest discover -s src/ingestion_lambda/tests
   python -m unittest discover -s scripts/tests
   python scripts/validate_iam.py
   python scripts/check_cost_guardrails.py

@@ -59,3 +59,54 @@ resource "aws_iam_role_policy" "kb" {
   policy = data.aws_iam_policy_document.kb.json
 }
 
+data "aws_iam_policy_document" "ingestion_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ingestion_lambda" {
+  name               = "${local.name_prefix}-ingestion-lambda-role"
+  assume_role_policy = data.aws_iam_policy_document.ingestion_trust.json
+  tags               = local.default_tags
+}
+
+data "aws_iam_policy_document" "ingestion_lambda" {
+  statement {
+    sid = "ConsumeIngestionQueue"
+    actions = [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+      "sqs:ChangeMessageVisibility"
+    ]
+    resources = [aws_sqs_queue.ingestion.arn]
+  }
+  statement {
+    sid = "WriteLogs"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["${aws_cloudwatch_log_group.ingestion.arn}:*"]
+  }
+  statement {
+    sid = "ManageKnowledgeBaseIngestion"
+    actions = [
+      "bedrock:StartIngestionJob",
+      "bedrock:ListIngestionJobs"
+    ]
+    resources = [local.kb_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ingestion_lambda" {
+  name   = "${local.name_prefix}-ingestion-lambda-policy"
+  role   = aws_iam_role.ingestion_lambda.id
+  policy = data.aws_iam_policy_document.ingestion_lambda.json
+}
+

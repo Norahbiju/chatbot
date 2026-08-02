@@ -28,7 +28,7 @@ Workflow triggers:
 
 - `pull_request` in `.github/workflows/terraform-pr-plan.yml` for infra, source, frontend, documents, workflow/action, and `.terraform-version` changes
 - `workflow_dispatch` in `.github/workflows/terraform-dispatch.yml` with `action` of `plan`, `apply`, or `destroy`; optional `source_run_id` and `destroy_confirmation`
-- `workflow_dispatch` in `.github/workflows/sync-documents.yml` uploads `documents/` to the source bucket, deletes removed S3 objects, starts Bedrock ingestion, and waits for completion
+- `workflow_dispatch` in `.github/workflows/sync-documents.yml` uploads `documents/` to the source bucket and deletes removed S3 objects; S3 events trigger Bedrock ingestion automatically through EventBridge, SQS, and Lambda
 
 Repository variables:
 
@@ -38,8 +38,8 @@ Repository variables:
 - `TF_STATE_BUCKET`
 - `TF_STATE_REGION`
 - `TF_STATE_KEY`
-- `TF_ALERT_EMAIL`
-- `TF_MONTHLY_BUDGET_LIMIT_USD`
+- `TF_ALERT_EMAIL` (optional)
+- `TF_MONTHLY_BUDGET_LIMIT_USD` (optional)
 
 The workflows now read the fixed working directory and backend state key from repository variables instead of workflow-level `env` blocks. The deployment role ARN is hardcoded as `arn:aws:iam::484632959006:role/chatbot`.
 
@@ -57,7 +57,7 @@ Artifacts retain for 3 days.
 
 PR comment jobs use the built-in `github.token`; no PR comment secret is required.
 
-Knowledge Base documents are not managed as Terraform `aws_s3_object` resources. Terraform owns the source bucket, Bedrock Knowledge Base, data source, and S3 Vectors resources; the `Sync Documents` workflow owns document object sync and ingestion.
+Knowledge Base documents are not managed as Terraform `aws_s3_object` resources. Terraform owns the source bucket, Bedrock Knowledge Base, data source, S3 Vectors resources, EventBridge rule, SQS queues, and ingestion Lambda; the `Sync Documents` workflow owns document object upload/delete only.
 
 ## Interfaces and dependencies
 Composite action responsibilities:
@@ -141,3 +141,4 @@ SonarCloud is still failing separately and is not part of the Terraform promotio
 - 2026-07-30: Simplified the single-root pipeline further by removing stack/environment workflow inputs, moving to one fixed `TF_STATE_KEY`, shortening artifact names, and reducing destroy confirmation noise.
 - 2026-07-30: Used a temporary Bedrock data-source repair workflow to recover a stuck live resource, then removed that one-off workflow after normal dispatch plan/apply validation succeeded.
 - 2026-08-01: Moved Knowledge Base document object management out of Terraform and into `.github/workflows/sync-documents.yml`.
+- 2026-08-02: Changed `.github/workflows/sync-documents.yml` to upload-only; S3 document changes now trigger Bedrock ingestion through the Terraform-managed EventBridge/SQS/Lambda path.

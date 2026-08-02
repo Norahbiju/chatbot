@@ -30,6 +30,18 @@ output "sns_topic_arn" {
   value = module.core.sns_topic_arn
 }
 
+output "ingestion_queue_url" {
+  value = module.core.ingestion_queue_url
+}
+
+output "ingestion_dlq_url" {
+  value = module.core.ingestion_dlq_url
+}
+
+output "ingestion_lambda_name" {
+  value = module.core.ingestion_lambda_name
+}
+
 output "ssm_parameter_names" {
   value = module.core.ssm_parameter_names
 }
