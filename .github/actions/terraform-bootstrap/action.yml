@@ -59,19 +59,6 @@ runs:
         restore-keys: |
           terraform-plugin-cache-${{ runner.os }}-${{ inputs.terraform-version }}-
 
-    - name: Show GitHub OIDC claims
-      shell: bash
-      run: |
-        set -Eeuo pipefail
-        token_response="$(curl -sSf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")"
-        token="$(jq -r '.value' <<< "${token_response}")"
-        payload="$(cut -d '.' -f 2 <<< "${token}")"
-        payload="${payload//-/+}"
-        payload="${payload//_/\/}"
-        while (( ${#payload} % 4 )); do payload="${payload}="; done
-        claims="$(printf '%s' "${payload}" | base64 -d 2>/dev/null)"
-        echo "${claims}" | jq '{sub,aud,repository,repository_owner,ref,workflow,event_name,job_workflow_ref}'
-
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v6.2.3
       with:
