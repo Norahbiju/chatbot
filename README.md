@@ -4,8 +4,10 @@ This repository contains a low-cost Amazon Bedrock RAG chatbot implemented as on
 
 ```mermaid
 flowchart LR
-  D[Markdown documents] --> SD[Sync Documents workflow]
-  SD --> S3[(Private source S3)]
+  D[Markdown documents] --> TF[Terraform apply]
+  D --> SD[Optional Sync Documents workflow]
+  TF --> S3[(Private source S3)]
+  SD --> S3
   S3 --> EB[EventBridge]
   EB --> Q[SQS]
   Q --> IL[Ingestion Lambda]
@@ -90,7 +92,7 @@ The repository includes two Terraform workflows and one document workflow:
 
 - `.github/workflows/terraform-pr-plan.yml` for speculative PR plans and sticky PR comments
 - `.github/workflows/terraform-dispatch.yml` for manual `plan`, `apply`, and `destroy`
-- `.github/workflows/sync-documents.yml` for syncing `documents/` to S3; S3 events trigger ingestion automatically
+- `.github/workflows/sync-documents.yml` as an optional later sync path for `documents/`; S3 events trigger ingestion automatically
 
 It supports:
 
@@ -143,7 +145,7 @@ Manual apply uses the exact saved plan artifact:
 Actions -> Terraform Dispatch -> Run workflow -> action=apply, source_run_id=<manual-plan-run-id>
 ```
 
-Sync Knowledge Base documents after infrastructure changes or content changes:
+Optionally sync Knowledge Base documents after content changes without running Terraform:
 
 ```text
 Actions -> Sync Documents -> Run workflow
@@ -176,7 +178,7 @@ Successful responses contain `sessionId`, `answer`, and numbered `citations`.
 
 ## Documents and Ingestion
 
-Terraform creates the private source bucket, Bedrock Knowledge Base data source, EventBridge rule, SQS queue, and ingestion Lambda. The separate `Sync Documents` GitHub Actions workflow uploads files from `documents/` to the configured S3 prefix and deletes removed objects with `aws s3 sync --delete`. S3 object change events then flow through EventBridge and SQS to the ingestion Lambda, which starts a Bedrock Knowledge Base ingestion job when one is not already active.
+Terraform creates the private source bucket, Bedrock Knowledge Base data source, EventBridge rule, SQS queue, ingestion Lambda, and the initial S3 document objects from `documents/`. The first Terraform apply uploads those files to the configured S3 prefix after the automatic ingestion path is in place. The separate `Sync Documents` GitHub Actions workflow remains an optional later update path; it uploads files from `documents/` and deletes removed objects with `aws s3 sync --delete`. S3 object change events then flow through EventBridge and SQS to the ingestion Lambda, which starts a Bedrock Knowledge Base ingestion job when one is not already active.
 
 ## Frontend
 

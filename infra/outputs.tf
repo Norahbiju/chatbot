@@ -6,6 +6,10 @@ output "document_prefix" {
   value = module.core.document_prefix
 }
 
+output "managed_document_object_count" {
+  value = module.core.managed_document_object_count
+}
+
 output "vector_bucket_arn" {
   value = module.core.vector_bucket_arn
 }

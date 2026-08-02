@@ -6,6 +6,10 @@ output "document_prefix" {
   value = "${local.document_prefix}/"
 }
 
+output "managed_document_object_count" {
+  value = length(aws_s3_object.initial_documents)
+}
+
 output "vector_bucket_arn" {
   value = local.vector_bucket_arn
 }

@@ -21,7 +21,7 @@ SSM names:
 - `/bedrock-rag/dev/bedrock/alert-topic-arn`
 
 ## Interfaces and dependencies
-One Terraform apply now creates the infrastructure system. Internally, the core module publishes the knowledge base ID, model ID, and SNS topic ARN to SSM Parameter Store; the root reads those SSM parameters and passes the resolved values into the application module. Source document objects are synced by the `Sync Documents` GitHub Actions workflow after infrastructure exists, and S3 object changes trigger Bedrock ingestion through EventBridge, SQS, and the ingestion Lambda.
+One Terraform apply now creates the infrastructure system. Internally, the core module publishes the knowledge base ID, model ID, and SNS topic ARN to SSM Parameter Store; the root reads those SSM parameters and passes the resolved values into the application module. The core module also uploads the initial contents of `documents/` to the source bucket as Terraform-managed S3 objects after the automatic ingestion path exists. The `Sync Documents` GitHub Actions workflow remains an optional later upload/delete path, and S3 object changes trigger Bedrock ingestion through EventBridge, SQS, and the ingestion Lambda.
 
 S3 buckets use private access, versioning, SSE-S3, TLS-only policies, lifecycle rules, and `force_destroy = true` by default for this dev-oriented setup. Lambda packaging, bucket hardening, alarms, and IAM are implemented directly inside the child modules instead of through extra helper modules.
 
@@ -47,3 +47,4 @@ Changing the S3 Vectors index metadata configuration is a vector-index replaceme
 - 2026-07-30: Corrected the live Bedrock data source deletion policy, reran the exact-plan pipeline, verified the deployed frontend and chat API successfully, and then removed the temporary recovery workflow.
 - 2026-08-01: Removed Terraform-managed source document objects and moved document uploads to the `Sync Documents` workflow.
 - 2026-08-02: Restored automatic S3 document ingestion through EventBridge, SQS, and an ingestion Lambda, while keeping `Sync Documents` upload-only. The root now reads core-published SSM parameters at deploy time before wiring the application module.
+- 2026-08-02: Added Terraform-managed initial document uploads from `documents/` so the first apply seeds the source bucket; the sync workflow remains available as an optional content update path.
