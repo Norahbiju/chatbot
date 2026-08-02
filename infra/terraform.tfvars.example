@@ -4,5 +4,5 @@ environment               = "dev"
 repository                = "chatbot"
 document_prefix           = "documents/"
 monthly_budget_limit_usd  = "5"
-enable_live_doc_fetch     = false
+enable_live_doc_fetch     = true
 # alert_email             = "replace-with-confirmed-email@example.com"

@@ -115,7 +115,7 @@ variable "api_burst_limit" {
 
 variable "enable_live_doc_fetch" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "live_fetch_min_retrieval_score" {
