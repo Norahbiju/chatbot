@@ -107,8 +107,6 @@ TF_STATE_BUCKET
 TF_STATE_REGION
 TF_WORKING_DIRECTORY
 TF_STATE_KEY
-TF_ALERT_EMAIL
-TF_MONTHLY_BUDGET_LIMIT_USD
 ```
 
 Suggested values:
@@ -118,8 +116,16 @@ AWS_REGION=ap-south-1
 TF_WORKING_DIRECTORY=infra
 TF_STATE_REGION=ap-south-1
 TF_STATE_KEY=bedrock-rag/dev/terraform.tfstate
-TF_MONTHLY_BUDGET_LIMIT_USD=5
 ```
+
+Optional repository variables:
+
+```text
+TF_ALERT_EMAIL
+TF_MONTHLY_BUDGET_LIMIT_USD
+```
+
+If `TF_MONTHLY_BUDGET_LIMIT_USD` is not set, Terraform uses the default value in `infra/variables.tf`.
 
 Manual trusted plan:
 
