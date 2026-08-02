@@ -81,3 +81,7 @@ output "api_id" {
 output "budget_name" {
   value = module.application.budget_name
 }
+
+output "live_doc_source_registry_parameter_name" {
+  value = module.application.live_doc_source_registry_parameter_name
+}

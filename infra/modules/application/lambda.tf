@@ -26,16 +26,24 @@ resource "aws_lambda_function" "query" {
 
   environment {
     variables = {
-      CONVERSATION_TABLE_NAME = aws_dynamodb_table.conversation.name
-      KNOWLEDGE_BASE_ID       = var.knowledge_base_id
-      MODEL_ID                = var.model_id
-      RETRIEVAL_COUNT         = tostring(var.retrieval_count)
-      MAX_GENERATION_TOKENS   = tostring(var.max_generation_tokens)
-      MAX_MESSAGE_LENGTH      = "2000"
-      HISTORY_LIMIT           = "8"
-      SESSION_TTL_SECONDS     = "86400"
-      AWS_RETRY_MODE          = "standard"
-      AWS_MAX_ATTEMPTS        = "3"
+      CONVERSATION_TABLE_NAME            = aws_dynamodb_table.conversation.name
+      KNOWLEDGE_BASE_ID                  = var.knowledge_base_id
+      MODEL_ID                           = var.model_id
+      RETRIEVAL_COUNT                    = tostring(var.retrieval_count)
+      MAX_GENERATION_TOKENS              = tostring(var.max_generation_tokens)
+      MAX_MESSAGE_LENGTH                 = "2000"
+      HISTORY_LIMIT                      = "8"
+      SESSION_TTL_SECONDS                = "86400"
+      ENABLE_LIVE_DOC_FETCH              = tostring(var.enable_live_doc_fetch)
+      LIVE_DOC_SOURCE_REGISTRY_PARAMETER = aws_ssm_parameter.live_doc_sources.name
+      LIVE_FETCH_MIN_RETRIEVAL_SCORE     = tostring(var.live_fetch_min_retrieval_score)
+      LIVE_FETCH_MAX_PAGES               = tostring(var.live_fetch_max_pages)
+      LIVE_FETCH_TIMEOUT_SECONDS         = tostring(var.live_fetch_timeout_seconds)
+      LIVE_FETCH_MAX_RESPONSE_BYTES      = tostring(var.live_fetch_max_response_bytes)
+      LIVE_FETCH_MAX_TOTAL_BYTES         = tostring(var.live_fetch_max_total_bytes)
+      LIVE_FETCH_MAX_REDIRECTS           = tostring(var.live_fetch_max_redirects)
+      AWS_RETRY_MODE                     = "standard"
+      AWS_MAX_ATTEMPTS                   = "3"
     }
   }
 }

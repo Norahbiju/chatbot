@@ -112,3 +112,44 @@ variable "api_burst_limit" {
   type    = number
   default = 4
 }
+
+variable "enable_live_doc_fetch" {
+  type    = bool
+  default = true
+}
+
+variable "live_fetch_min_retrieval_score" {
+  type    = number
+  default = 0.65
+}
+
+variable "live_fetch_max_pages" {
+  type    = number
+  default = 3
+}
+
+variable "live_fetch_timeout_seconds" {
+  type    = number
+  default = 15
+}
+
+variable "live_fetch_max_response_bytes" {
+  type    = number
+  default = 2000000
+}
+
+variable "live_fetch_max_total_bytes" {
+  type    = number
+  default = 5000000
+}
+
+variable "live_fetch_max_redirects" {
+  type    = number
+  default = 3
+}
+
+variable "live_doc_source_registry_json" {
+  type      = string
+  default   = ""
+  sensitive = true
+}

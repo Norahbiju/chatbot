@@ -29,3 +29,7 @@ output "api_id" {
 output "budget_name" {
   value = aws_budgets_budget.monthly.name
 }
+
+output "live_doc_source_registry_parameter_name" {
+  value = aws_ssm_parameter.live_doc_sources.name
+}

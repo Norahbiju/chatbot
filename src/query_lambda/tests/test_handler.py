@@ -17,17 +17,24 @@ class QueryTests(unittest.TestCase):
         os.environ["CONVERSATION_TABLE_NAME"] = "table"
         os.environ["KNOWLEDGE_BASE_ID"] = "kb"
         os.environ["MODEL_ID"] = "apac.amazon.nova-micro-v1:0"
+        os.environ.pop("ENABLE_LIVE_DOC_FETCH", None)
         with patch("boto3.resource") as resource, patch("boto3.client") as client:
             self.table = Mock()
             resource.return_value.Table.return_value = self.table
             self.agent = Mock()
             self.runtime = Mock()
-            client.side_effect = lambda service, **kwargs: self.agent if service == "bedrock-agent-runtime" else self.runtime
+            self.ssm = Mock()
+            client.side_effect = lambda service, **kwargs: {
+                "bedrock-agent-runtime": self.agent,
+                "bedrock-runtime": self.runtime,
+                "ssm": self.ssm,
+            }[service]
             import src.query_lambda.handler as handler
             self.handler = importlib.reload(handler)
             self.handler.dynamodb.Table.return_value = self.table
             self.handler.bedrock_agent_runtime = self.agent
             self.handler.bedrock_runtime = self.runtime
+            self.handler.ssm = self.ssm
 
     def event(self, body):
         return {"version": "2.0", "body": json.dumps(body)}
@@ -45,6 +52,8 @@ class QueryTests(unittest.TestCase):
         result = self.handler.lambda_handler(self.event({"sessionId": SESSION, "message": "What is locking?"}), None)
         self.assertEqual(result["statusCode"], 200)
         self.assertEqual(self.table.put_item.call_count, 2)
+        body = json.loads(result["body"])
+        self.assertFalse(body["live_fetch_used"])
 
     def test_invalid_json(self):
         result = self.handler.lambda_handler({"body": "{"}, None)
@@ -91,6 +100,7 @@ class QueryTests(unittest.TestCase):
         citation = self.handler._citations([{"content": {"text": "abc"}, "score": 1, "location": {"s3Location": {"uri": "s3://b/documents/a.md"}}}])[0]
         self.assertEqual(citation["id"], 1)
         self.assertEqual(citation["source"], "documents/a.md")
+        self.assertEqual(citation["source_type"], "KNOWLEDGE_BASE")
 
     def test_bedrock_throttling(self):
         self.table.query.return_value = {"Items": []}
@@ -109,3 +119,11 @@ class QueryTests(unittest.TestCase):
         self.table.query.side_effect = RuntimeError("boom")
         result = self.handler.lambda_handler(self.event({"sessionId": SESSION, "message": "x"}), None)
         self.assertEqual(result["statusCode"], 500)
+
+    def test_unknown_model_citation_removed(self):
+        self.table.query.return_value = {"Items": []}
+        self.retrieval_response()
+        self.model_response("Answer [1] [99].")
+        result = self.handler.lambda_handler(self.event({"sessionId": SESSION, "message": "x"}), None)
+        body = json.loads(result["body"])
+        self.assertEqual(body["answer"], "Answer [1] .")
