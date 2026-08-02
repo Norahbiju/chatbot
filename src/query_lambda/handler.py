@@ -122,6 +122,7 @@ def _citations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "version": metadata.get("version", "indexed"),
             "fetched_at": None,
             "excerpt": text[:350],
+            "evidence": text[:1200],
             "score": float(result.get("score", 0)),
         })
     return citations
@@ -130,7 +131,7 @@ def _citations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _build_prompt(message: str, history: List[Dict[str, Any]], citations: List[Dict[str, Any]]) -> str:
     history_text = "\n".join(f"{h.get('role')}: {str(h.get('content', ''))[:500]}" for h in history[-HISTORY_LIMIT:])
     evidence = "\n\n".join(
-        f"[{c['id']}] {c['title']} ({c.get('url') or c.get('source')}): {c['excerpt']}"
+        f"[{c['id']}] {c['title']} ({c.get('url') or c.get('source')}): {c.get('evidence') or c['excerpt']}"
         for c in citations
     )
     return (
@@ -157,6 +158,7 @@ def _live_citations(contexts: List[Dict[str, Any]], start_id: int) -> List[Dict[
             "version": context.get("version", "current"),
             "fetched_at": context.get("fetched_at"),
             "excerpt": context["text"][:350],
+            "evidence": context["text"][:LIVE_FETCH_MAX_CHARS_PER_PAGE],
             "score": None,
         })
     return citations
