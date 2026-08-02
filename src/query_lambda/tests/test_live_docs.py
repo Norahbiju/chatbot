@@ -71,6 +71,16 @@ class LiveDocsTests(unittest.TestCase):
         self.assertEqual(answer, "Answer [1] .")
         self.assertEqual(len(sources), 1)
 
+    def test_filter_cited_sources_renumbers_remaining_sources(self):
+        answer, sources = filter_cited_sources("Answer [2].", [{"id": 1, "title": "KB"}, {"id": 2, "title": "Live", "evidence": "hidden"}])
+        self.assertEqual(answer, "Answer [1].")
+        self.assertEqual(sources, [{"id": 1, "title": "Live"}])
+
+    def test_filter_cited_sources_renumbers_out_of_order(self):
+        answer, sources = filter_cited_sources("Answer [2] then [1].", [{"id": 1, "title": "KB"}, {"id": 2, "title": "Live"}])
+        self.assertEqual(answer, "Answer [1] then [2].")
+        self.assertEqual([source["title"] for source in sources], ["Live", "KB"])
+
 
 if __name__ == "__main__":
     unittest.main()

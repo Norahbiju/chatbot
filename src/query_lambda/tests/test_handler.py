@@ -127,3 +127,10 @@ class QueryTests(unittest.TestCase):
         result = self.handler.lambda_handler(self.event({"sessionId": SESSION, "message": "x"}), None)
         body = json.loads(result["body"])
         self.assertEqual(body["answer"], "Answer [1] .")
+
+    def test_private_evidence_not_returned(self):
+        citation = self.handler._citations([{"content": {"text": "abc"}, "score": 1, "location": {"s3Location": {"uri": "s3://b/documents/a.md"}}}])[0]
+        self.assertIn("evidence", citation)
+        answer, public = self.handler.filter_cited_sources("Answer [1].", [citation])
+        self.assertEqual(answer, "Answer [1].")
+        self.assertNotIn("evidence", public[0])
