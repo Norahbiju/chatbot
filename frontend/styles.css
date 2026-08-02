@@ -227,6 +227,19 @@ button {
   border-radius: 8px;
   padding: 9px 10px;
   background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 4px;
+  white-space: normal;
+}
+
+.citation a {
+  color: #8cc8ff;
+  overflow-wrap: anywhere;
+}
+
+.citation-source {
+  color: var(--subtle);
+  overflow-wrap: anywhere;
 }
 
 .composer-wrap {

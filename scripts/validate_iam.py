@@ -7,7 +7,7 @@ LAMBDA_POLICY_FILES = [
     ROOT / "infra/modules/core/iam.tf",
     ROOT / "infra/modules/application/iam.tf",
 ]
-BROAD_ACTIONS = ("bedrock:*", "s3:*", "dynamodb:*", "sqs:*", "logs:*")
+BROAD_ACTIONS = ("bedrock:*", "s3:*", "dynamodb:*", "sqs:*", "logs:*", "ssm:*")
 
 
 def fail(message: str) -> None:

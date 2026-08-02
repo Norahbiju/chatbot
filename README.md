@@ -184,6 +184,12 @@ Terraform creates the private source bucket, Bedrock Knowledge Base data source,
 
 The frontend stores only a random browser session ID in `localStorage`, sends messages to the relative path `/api/chat`, renders text safely without `innerHTML`, and displays citations below assistant responses.
 
+## Live Documentation Fetching
+
+The query Lambda includes an optional live documentation fallback that is disabled by default. When `enable_live_doc_fetch` is set to `true`, the Lambda still retrieves from the Bedrock Knowledge Base first. It only fetches live documentation when retrieval is insufficient or the user explicitly asks for current or official documentation. Live fetching is restricted to an administrator-controlled SSM source registry and the packaged approved URL catalogue. There is no scheduled crawling, no external search provider, no live-page cache, and no automatic ingestion of fetched pages.
+
+Initial approved source registry entries cover Kubernetes, GitHub Actions, and Terraform documentation. Every fetched URL is validated against exact hostnames and path prefixes before use, and citations are returned from backend metadata rather than model-generated URLs.
+
 ## Alarms and Budget
 
 CloudWatch alarms monitor query Lambda error rate, API Gateway 5xx rate, and DynamoDB throttling. An AWS monthly cost budget defaults to `$5` and sends notifications to the shared SNS topic.
@@ -192,6 +198,7 @@ CloudWatch alarms monitor query Lambda error rate, API Gateway 5xx rate, and Dyn
 
 - If Bedrock returns access denied, enable model access and verify regional availability.
 - If no citations appear, confirm source documents were uploaded and ingestion completed.
+- If live documentation is not used, confirm `enable_live_doc_fetch=true` was applied and the SSM source registry entry is enabled for the requested product.
 - If plan/apply cannot read the backend, verify the shared state bucket, lockfile permissions, and OIDC role access.
 
 ## Security Notes

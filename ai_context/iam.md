@@ -23,7 +23,7 @@ Lambda roles do not include `Resource = "*"`, broad actions such as `bedrock:*`,
 ## Interfaces and dependencies
 Knowledge Base role trust principal: `bedrock.amazonaws.com`, restricted by source account and `knowledge-base/*` source ARN pattern because the exact KB ARN is not available until creation. Permissions: S3 read/list on the exact source bucket and prefix, `bedrock:InvokeModel` on the Titan embedding model ARN, and S3 Vectors actions on the exact vector bucket/index ARNs.
 
-Query Lambda trust principal: `lambda.amazonaws.com`. Permissions: `bedrock:Retrieve` on the exact KB ARN, `bedrock:InvokeModel` on the exact generation model ARN, DynamoDB `Query`, `GetItem`, and `PutItem` on the exact table ARN, and CloudWatch Logs stream/write on exact log group streams.
+Query Lambda trust principal: `lambda.amazonaws.com`. Permissions: `bedrock:Retrieve` on the exact KB ARN, `bedrock:InvokeModel` on the exact generation model ARN, DynamoDB `Query`, `GetItem`, and `PutItem` on the exact table ARN, `ssm:GetParameter` on the exact live documentation source registry parameter, and CloudWatch Logs stream/write on exact log group streams.
 
 Ingestion Lambda trust principal: `lambda.amazonaws.com`. Permissions: SQS receive/delete/attribute/change-visibility on the exact ingestion queue, CloudWatch Logs stream/write on the exact ingestion log group streams, and `bedrock:StartIngestionJob`/`bedrock:ListIngestionJobs` on the exact Knowledge Base ARN.
 
@@ -40,3 +40,4 @@ Some AWS APIs may not support resource-level permissions exactly as modeled; AWS
 - 2026-07-30: Updated the context for the single-root Terraform layout and module-based IAM file locations.
 - 2026-08-01: Removed the ingestion Lambda role after Knowledge Base document sync moved to GitHub Actions.
 - 2026-08-02: Restored the scoped ingestion Lambda role for EventBridge/SQS-driven automatic Bedrock ingestion.
+- 2026-08-02: Added scoped query Lambda read access to the live documentation source registry SSM parameter.

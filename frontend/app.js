@@ -113,7 +113,28 @@ function appendMessageNode(role, text, citations = []) {
     citations.forEach((citation) => {
       const node = document.createElement("div");
       node.className = "citation";
-      node.textContent = `[${citation.id}] ${citation.title} - ${citation.source}`;
+      const label = document.createElement("span");
+      const kind = citation.source_type === "LIVE_DOCUMENTATION" ? "Live docs" : "Indexed";
+      label.textContent = `[${citation.id}] ${kind} - ${citation.title}`;
+      node.appendChild(label);
+      const location = citation.url || citation.source;
+      if (citation.url) {
+        const link = document.createElement("a");
+        link.href = citation.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        try {
+          link.textContent = new URL(citation.url).hostname;
+        } catch {
+          link.textContent = citation.url;
+        }
+        node.appendChild(link);
+      } else if (location) {
+        const source = document.createElement("span");
+        source.className = "citation-source";
+        source.textContent = location;
+        node.appendChild(source);
+      }
       list.appendChild(node);
     });
     body.appendChild(list);

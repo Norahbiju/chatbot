@@ -6,11 +6,13 @@ Build a minimal Bedrock RAG chatbot that answers from a curated Markdown corpus,
 ## Current state
 Implemented locally. The query Lambda accepts API Gateway HTTP API payload version 2.0 requests at `POST /api/chat`, retrieves evidence with Bedrock Knowledge Bases `Retrieve`, invokes the configured model through `InvokeModel`, stores user and assistant messages separately, and returns citations. Knowledge Base documents are initially uploaded by Terraform from `documents/`; the `Sync Documents` GitHub Actions workflow remains an optional later update path. Ingestion is triggered automatically from S3 object changes through EventBridge, SQS, and the ingestion Lambda.
 
+The query Lambda also has an optional live documentation fallback for allowlisted official documentation sources. The feature is disabled by default. When enabled, the Lambda retrieves from the Knowledge Base first, evaluates deterministic sufficiency rules, searches the administrator-controlled source registry catalogue, validates candidate URLs, fetches a small number of HTTPS pages, extracts clean text, and returns backend-validated citations with real documentation URLs. There is no scheduled crawling, no external search provider, no live-page cache, and no automatic ingestion of fetched pages.
+
 The Terraform root packages the query Lambda through an `archive_file` data source inside `infra/modules/application`. The knowledge-base corpus now goes beyond the original three overview notes and includes additional curated documents on GitHub Actions workflow syntax, contexts and runners, Kubernetes networking and policy, Kubernetes stateful/storage/security behavior, Terraform language and CLI behavior, and Terraform AWS provider serverless patterns.
 
 API request: `{"sessionId":"uuid","message":"question"}`.
 
-Success response: `{"sessionId":"uuid","answer":"text [1]","citations":[{"id":1,"title":"Terraform State, Backends, and Module Design","source":"documents/terraform-basics.md","excerpt":"...","score":0.82}]}`.
+Success response: `{"sessionId":"uuid","answer":"text [1]","citations":[{"id":1,"title":"Terraform State, Backends, and Module Design","source":"documents/terraform-basics.md","url":null,"source_type":"KNOWLEDGE_BASE","excerpt":"...","score":0.82}],"live_fetch_used":false,"live_fetch_reason":null}`.
 
 Error response: `{"error":{"code":"INVALID_REQUEST","message":"..."}}`.
 
@@ -41,3 +43,4 @@ Requires AWS deployment validation for the final Bedrock generation-model switch
 - 2026-08-01: Moved Knowledge Base document uploads out of Terraform and into the `Sync Documents` GitHub Actions workflow.
 - 2026-08-02: Restored automatic ingestion from S3 document changes through EventBridge, SQS, and the ingestion Lambda.
 - 2026-08-02: Added Terraform-managed initial document upload while keeping `Sync Documents` as an optional later update path.
+- 2026-08-02: Added an optional allowlisted live documentation fallback and trusted citation validation; optional cache and live-page ingestion remain excluded.

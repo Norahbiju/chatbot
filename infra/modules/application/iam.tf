@@ -45,6 +45,11 @@ data "aws_iam_policy_document" "query_lambda" {
     resources = [aws_dynamodb_table.conversation.arn]
   }
   statement {
+    sid       = "ReadLiveDocSourceRegistry"
+    actions   = ["ssm:GetParameter"]
+    resources = [aws_ssm_parameter.live_doc_sources.arn]
+  }
+  statement {
     sid = "WriteLogs"
     actions = [
       "logs:CreateLogStream",
